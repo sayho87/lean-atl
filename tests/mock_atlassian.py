@@ -97,7 +97,7 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urlparse(self.path)
         p = u.path
-        if p == "/rest/api/3/search":
+        if p == "/rest/api/3/search" or p == "/rest/api/2/search":
             self._json({"issues": [ISSUE]})
         elif p == "/rest/api/3/issue/TEST-1":
             self._json(ISSUE)
@@ -108,6 +108,8 @@ class H(BaseHTTPRequestHandler):
             ]})
         elif p == "/rest/api/3/project/search":
             self._json(PROJECTS)
+        elif p == "/rest/api/2/project":
+            self._json(PROJECTS["values"])  # Server/DC v2는 배열 반환
         elif p == "/rest/api/content/search":
             cql = parse_qs(u.query).get("cql", [""])[0]
             expand = parse_qs(u.query).get("expand", [""])[0]

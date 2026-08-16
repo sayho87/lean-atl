@@ -30,16 +30,41 @@ uv venv .venv
 uv pip install --python .venv/bin/python fastmcp httpx
 ```
 
-### 환경변수
+### 환경변수 (mcp-atlassian과 동일한 변수명)
+
+**Jira Cloud:**
 | 변수 | 설명 |
 |---|---|
-| `ATLASSIAN_SITE_URL` | 예: `https://your-domain.atlassian.net` |
-| `ATLASSIAN_USER_EMAIL` | 계정 이메일 |
-| `ATLASSIAN_API_TOKEN` | https://id.atlassian.com/manage-profile/security/api-tokens |
+| `JIRA_URL` | 예: `https://your-domain.atlassian.net` |
+| `JIRA_USERNAME` | 계정 이메일 |
+| `JIRA_API_TOKEN` | https://id.atlassian.com/manage-profile/security/api-tokens |
+
+**Confluence Cloud:**
+| 변수 | 설명 |
+|---|---|
+| `CONFLUENCE_URL` | 예: `https://your-domain.atlassian.net/wiki` |
+| `CONFLUENCE_USERNAME` | 계정 이메일 |
+| `CONFLUENCE_API_TOKEN` | API 토큰 |
+
+**Server/Data Center (PAT 사용 시):**
+| 변수 | 설명 |
+|---|---|
+| `JIRA_URL` / `CONFLUENCE_URL` | 자체 호스팅 주소 |
+| `JIRA_PERSONAL_TOKEN` / `CONFLUENCE_PERSONAL_TOKEN` | PAT (Bearer 인증, Jira는 REST v2 자동 전환) |
+| `JIRA_SSL_VERIFY` / `CONFLUENCE_SSL_VERIFY` | `false` 시 SSL 검증 해제 (기본 `true`) |
+
+**공통:**
+| 변수 | 설명 |
+|---|---|
 | `CONFLUENCE_SPACES_FILTER` | 허용 스페이스만 (콤마 구분, 예: `DEV,PM`) |
 | `JIRA_PROJECTS_FILTER` | 허용 프로젝트만 (콤마 구분, 예: `PROJ,TEST`) |
 | `LEAN_MAX_RESULTS` | 목록 기본 캡 (기본 20) |
 | `LEAN_BODY_CHARS` | 본문 기본 캡 (기본 8000) |
+
+**하위호환**: `ATLASSIAN_SITE_URL` / `ATLASSIAN_USER_EMAIL` / `ATLASSIAN_API_TOKEN`이
+있으면 Jira·Confluence 공용으로 사용한다 (`JIRA_*`/`CONFLUENCE_*`가 우선).
+인증은 `*_PERSONAL_TOKEN`이 있으면 Bearer(PAT), 없으면 Basic(Cloud API Token)으로
+자동 판별한다.
 
 ### 클라이언트 설정 예시 (Claude Desktop / Cursor)
 
@@ -50,16 +75,24 @@ uv pip install --python .venv/bin/python fastmcp httpx
       "command": "/Users/howoomac/Projects/lean-atlassian-mcp/.venv/bin/python",
       "args": ["/Users/howoomac/Projects/lean-atlassian-mcp/lean_atlassian.py"],
       "env": {
-        "ATLASSIAN_SITE_URL": "https://your-domain.atlassian.net",
-        "ATLASSIAN_USER_EMAIL": "you@company.com",
-        "ATLASSIAN_API_TOKEN": "your_token"
+        "JIRA_URL": "https://your-domain.atlassian.net",
+        "JIRA_USERNAME": "you@company.com",
+        "JIRA_API_TOKEN": "your_token",
+        "CONFLUENCE_URL": "https://your-domain.atlassian.net/wiki",
+        "CONFLUENCE_USERNAME": "you@company.com",
+        "CONFLUENCE_API_TOKEN": "your_token",
+        "CONFLUENCE_SPACES_FILTER": "DEV,PM",
+        "JIRA_PROJECTS_FILTER": "PROJ"
       }
     }
   }
 }
 ```
 
-## 도구 목록 (탐색 위주 9개)
+Server/DC(PAT) 예시: `JIRA_PERSONAL_TOKEN`·`CONFLUENCE_PERSONAL_TOKEN`만 채우고
+`JIRA_SSL_VERIFY=false` 등을 추가하면 된다.
+
+## 도구 목록 (탐색 위주 10개)
 
 | 도구 | 설명 |
 |---|---|
