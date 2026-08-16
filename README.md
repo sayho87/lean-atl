@@ -126,18 +126,21 @@ Server/DC(PAT) 예시: `JIRA_PERSONAL_TOKEN`·`CONFLUENCE_PERSONAL_TOKEN`만 채
 **결론: mcp-atlassian보다 공격 표면이 작고, 쓰기 도구가 없어 피해 범위가 제한적.**
 
 - **읽기 전용** — 쓰기 도구(생성/수정/삭제/전이/첨부)가 없어, LLM이 잘못된 도구를 호출해도 데이터 변경 불가 (mcp-atlassian은 쓰기 도구 다수 보유)
-- **이슈키 형식 검증** — `jira_get`의 key를 API 호출 전에 정규식으로 검증 (`JIRA_ISSUE_KEY_PATTERN`, mcp-atlassian과 동일 기본 패턴). `../../admin` 같은 입력은 API에 도달하기 전에 거부
+- **스코프 필터는 강제 경계** — `JIRA_PROJECTS_FILTER`는 JQL에 AND로 붙고, `jira_get`은 프로젝트 접두가 허용 목록 밖이면 API 전에 거절. `CONFLUENCE_SPACES_FILTER`는 CQL에 AND로 붙고, `confluence_get`/`get_children`/`get_comments`/`space_tree`도 허용 밖이면 본문을 돌려주지 않음 (mcp-atlassian과 같은 방식)
+- **경로 조작 차단** — 컨플루언스 `id`는 숫자만, 스페이스 키는 영문·숫자·밑줄만. `../../admin` 같은 입력은 URL에 붙이기 전에 거절
+- **출력 한도 강제** — `limit`/`max_chars`는 `LEAN_MAX_RESULTS`/`LEAN_BODY_CHARS`로 자르고 음수는 1로 올림. `LEAN_BODY_CHARS`가 실제로 적용됨
+- **이슈키 형식 검증** — `jira_get`의 key를 API 호출 전에 정규식으로 검증 (`JIRA_ISSUE_KEY_PATTERN`, mcp-atlassian과 동일 기본 패턴)
 - **mTLS 지원** — `JIRA_CLIENT_CERT`(+`KEY`) / `CONFLUENCE_CLIENT_CERT`(+`KEY`)로 Server/DC mTLS 대응 (mcp-atlassian과 동일 변수명)
 - **토큰 노출 경로 없음** — 토큰은 env에서 읽어 Authorization 헤더로만 사용. 코드·로그·에러 메시지·도구 출력에 토큰이 나오는 경로 없음 (grep 검증)
 - **리다이렉트 미허용** — httpx 기본값(follow_redirects=False) 유지 → 리다이렉트로 다른 호스트에 자격증명이 전송될 위험 없음
 - **의존성 2개** (fastmcp, httpx) vs mcp-atlassian 28개 → 공급망 공격 표면 축소
 - **stdio 전용** — 네트워크 리스닝 없음 (mcp-atlassian은 HTTP/S SE 지원으로 노출 시 인증 필요)
-- **보안 기능 추가로 토큰 영향 없음** — 키 검증·mTLS·SSL_VERIFY는 서버 코드/환경변수 영역이라 도구 스키마가 변하지 않음 (실측: 1,394B 유지)
+- **보안 기능 추가로 토큰 영향 없음** — 키 검증·mTLS·필터·한도는 서버 코드/환경변수 영역이라 도구 스키마가 변하지 않음 (실측: 1,394B 유지)
 
 **한계 (사용자 책임 영역):**
 - HTTPS가 아니면 평문 전송 — 반드시 `https://` URL 사용
 - `*_SSL_VERIFY=false`는 MITM 위험 — 자체 서명 인증서가 아니면 끄지 말 것
-- `CONFLUENCE_SPACES_FILTER`/`JIRA_PROJECTS_FILTER`는 편의 필터이지 보안 경계가 아님 — 실제 권한 통제는 Atlassian 측 프로젝트/스페이스 권한이 담당 (mcp-atlassian도 동일)
+- `CONFLUENCE_SPACES_FILTER`/`JIRA_PROJECTS_FILTER`는 이제 검색 질의에 강제 AND되고 단건 조회도 막는다. 다만 진짜 권한 통제의 마지막 선은 여전히 Atlassian 측 프로젝트/스페이스 권한이다.
 - OAuth 2.0 / 프록시 헤더 인증(IGNORE_HEADER_AUTH)은 **HTTP 배포(멀티 사용자) 시나리오 전용**이라 stdio 로컬에선 적용될 환경이 없어 미지원 — 로컬 단일 사용자에선 토큰·PAT이 더 단순하고 동등한 수준
 
 ## 테스트 (실 API 키 없이)

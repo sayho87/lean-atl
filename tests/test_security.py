@@ -14,6 +14,7 @@ import tempfile
 sys.path.insert(0, ".")
 import lean_atlassian as la
 from fastmcp import Client
+from fastmcp.exceptions import ToolError
 
 fails = []
 
@@ -75,23 +76,58 @@ def unit_mtls() -> None:
         check(f"mTLS 클라이언트 생성: {type(e).__name__}", str(e)[:60], "OK")
 
 
-async def integration_key_guard() -> None:
+async def _call(c, name, args):
+    try:
+        r = await c.call_tool(name, args)
+        return getattr(r, "data", r)
+    except ToolError as e:
+        return str(e)
+
+
+async def integration_guards() -> None:
+    os.environ["JIRA_URL"] = "http://127.0.0.1:8765"
+    os.environ["JIRA_USERNAME"] = "test@test.com"
+    os.environ["JIRA_API_TOKEN"] = "fake"
+    os.environ["CONFLUENCE_URL"] = "http://127.0.0.1:8765"
+    os.environ["CONFLUENCE_USERNAME"] = "test@test.com"
+    os.environ["CONFLUENCE_API_TOKEN"] = "fake"
+    os.environ.pop("JIRA_PROJECTS_FILTER", None)
+    os.environ.pop("CONFLUENCE_SPACES_FILTER", None)
+    os.environ.pop("JIRA_ISSUE_KEY_PATTERN", None)
+    os.environ.pop("JIRA_CLIENT_CERT", None)
+    os.environ.pop("JIRA_CLIENT_KEY", None)
     m = importlib.reload(la)
     async with Client(m.mcp) as c:
-        # 정상 키 → mock 응답
-        r = await c.call_tool("jira_get", {"key": "TEST-1"})
-        check("jira_get 정상 키 동작", getattr(r, "data", r).get("key"), "TEST-1")
-        # 비정상 키 → API 호출 전 거부
-        r = await c.call_tool("jira_get", {"key": "../../admin"})
-        err = getattr(r, "data", r)
-        check("jira_get 악성 키 거부", "형식이 아님" in str(err), True)
+        r = await _call(c, "jira_get", {"key": "TEST-1"})
+        check("jira_get 정상 키 동작", r.get("key") if isinstance(r, dict) else r, "TEST-1")
+        r = await _call(c, "jira_get", {"key": "../../admin"})
+        check("jira_get 악성 키 거부", "형식이 아님" in str(r), True)
+        r = await _call(c, "confluence_get", {"id": "../../admin"})
+        check("confluence_get 경로조작 거부", "숫자만 허용" in str(r), True)
+        r = await _call(c, "confluence_get_children", {"id": "12345?x=1"})
+        check("children 쿼리주입 거부", "숫자만 허용" in str(r), True)
+        r = await _call(c, "confluence_get", {"id": "12345", "max_chars": 10_000_000})
+        body = (r.get("body") if isinstance(r, dict) else "") or ""
+        check("max_chars 상한", len(body) <= m.BODY_CHARS, True)
+
+    os.environ["JIRA_PROJECTS_FILTER"] = "PROJ"
+    os.environ["CONFLUENCE_SPACES_FILTER"] = "PM"
+    m = importlib.reload(la)
+    async with Client(m.mcp) as c:
+        r = await _call(c, "jira_get", {"key": "TEST-1"})
+        check("jira_get 필터 전 거절", "없는 프로젝트" in str(r), True)
+        r = await _call(c, "confluence_get", {"id": "12345"})
+        check("confluence_get 스페이스 거절",
+              isinstance(r, dict) and r.get("error") is not None, True)
+        r = await _call(c, "confluence_space_tree", {"space_key": "../etc"})
+        check("space_key 경로조작 거부", "형식이 아님" in str(r), True)
 
 
 async def main() -> None:
     unit_key_validation()
     unit_custom_pattern()
     unit_mtls()
-    await integration_key_guard()
+    await integration_guards()
     print(f"\n{'전부 통과' if not fails else f'실패: {fails}'}")
 
 

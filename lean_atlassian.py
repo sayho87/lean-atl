@@ -66,8 +66,22 @@ CONF_SPACES = {s.strip() for s in os.environ.get("CONFLUENCE_SPACES_FILTER", "")
 JIRA_PROJECTS = {s.strip() for s in os.environ.get("JIRA_PROJECTS_FILTER", "").split(",") if s.strip()}
 
 # --- 보안: 이슈키 형식 검증 / mTLS (mcp-atlassian과 동일 변수명·기본 패턴) ---
-ISSUE_KEY_RE = re.compile(os.environ.get(
-    "JIRA_ISSUE_KEY_PATTERN", r"^[A-Z][A-Z0-9_]+-\d+(?:-\d+)*$"))
+_DEFAULT_ISSUE_KEY = r"^[A-Z][A-Z0-9_]+-\d+(?:-\d+)*$"
+_CONTENT_ID_RE = re.compile(r"^\d+$")
+_SPACE_KEY_RE = re.compile(r"^[A-Za-z0-9_]+$")
+_MAX_TREE_DEPTH = 5
+_ADF_MAX_DEPTH = 32
+
+
+def _compile_issue_key_re() -> re.Pattern[str]:
+    raw = os.environ.get("JIRA_ISSUE_KEY_PATTERN", _DEFAULT_ISSUE_KEY)
+    try:
+        return re.compile(raw)
+    except re.error:
+        return re.compile(_DEFAULT_ISSUE_KEY)
+
+
+ISSUE_KEY_RE = _compile_issue_key_re()
 JIRA_CERT = _first("JIRA_CLIENT_CERT")
 JIRA_CERT_KEY = _first("JIRA_CLIENT_KEY")
 CONF_CERT = _first("CONFLUENCE_CLIENT_CERT")
@@ -139,8 +153,10 @@ def _html_to_text(raw: str, max_chars: int) -> str:
     return s[:max_chars] + "…" if len(s) > max_chars else s
 
 
-def _adf_to_text(node: dict, buf: list[str]) -> None:
+def _adf_to_text(node: dict, buf: list[str], depth: int = 0) -> None:
     """Jira ADF(JSON) → plain text."""
+    if depth > _ADF_MAX_DEPTH:
+        return
     t = node.get("type")
     if t == "text":
         buf.append(node.get("text", ""))
@@ -148,7 +164,7 @@ def _adf_to_text(node: dict, buf: list[str]) -> None:
         buf.append("\n")
     else:
         for c in node.get("content") or []:
-            _adf_to_text(c, buf)
+            _adf_to_text(c, buf, depth + 1)
         if t in ("paragraph", "heading", "listItem", "codeBlock", "blockquote",
                  "panel", "rule", "tableRow"):
             buf.append("\n")
@@ -190,14 +206,111 @@ def _check_issue_key(key: str) -> None:
             f"이슈키 형식이 아님: {key!r} (허용 패턴: {ISSUE_KEY_RE.pattern})")
 
 
+def _clamp_limit(limit: int, cap: int | None = None) -> int:
+    top = MAX_RESULTS if cap is None else cap
+    try:
+        n = int(limit)
+    except (TypeError, ValueError):
+        n = top
+    return max(1, min(n, top))
+
+
+def _clamp_chars(max_chars: int) -> int:
+    try:
+        n = int(max_chars)
+    except (TypeError, ValueError):
+        n = BODY_CHARS
+    return max(1, min(n, BODY_CHARS))
+
+
+def _clamp_depth(max_depth: int) -> int:
+    try:
+        n = int(max_depth)
+    except (TypeError, ValueError):
+        n = 2
+    return max(0, min(n, _MAX_TREE_DEPTH))
+
+
+def _quote_ident(s: str) -> str:
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _and_query(q: str, clause: str) -> str:
+    """질의에 AND 절을 강제. 끝의 ORDER BY는 보존."""
+    if not q or not q.strip():
+        return clause
+    order = re.search(r"\s+(ORDER\s+BY\s+.*)$", q, re.IGNORECASE)
+    if order:
+        return f"({q[:order.start()]}) AND {clause} {order.group(1)}"
+    return f"({q}) AND {clause}"
+
+
+def _and_jql_projects(jql: str) -> str:
+    """JIRA_PROJECTS_FILTER를 JQL에 강제 AND (mcp-atlassian과 동일 방식)."""
+    if not JIRA_PROJECTS:
+        return jql
+    keys = sorted(JIRA_PROJECTS)
+    if len(keys) == 1:
+        clause = f"project = {_quote_ident(keys[0])}"
+    else:
+        clause = "project IN (" + ", ".join(_quote_ident(k) for k in keys) + ")"
+    return _and_query(jql, clause)
+
+
+def _and_cql_spaces(cql: str) -> str:
+    """CONFLUENCE_SPACES_FILTER를 CQL에 강제 AND."""
+    if not CONF_SPACES:
+        return cql
+    clause = " OR ".join(f"space = {_quote_ident(s)}" for s in sorted(CONF_SPACES))
+    if len(CONF_SPACES) > 1:
+        clause = f"({clause})"
+    return _and_query(cql, clause)
+
+
+def _check_content_id(id: str) -> None:
+    if not _CONTENT_ID_RE.match(id or ""):
+        raise ValueError(f"페이지 id는 숫자만 허용: {id!r}")
+
+
+def _check_space_key(space_key: str) -> None:
+    if not _SPACE_KEY_RE.match(space_key or ""):
+        raise ValueError(f"스페이스 키 형식이 아님: {space_key!r}")
+
+
+def _check_issue_scope(key: str) -> None:
+    """jira_get: 허용 프로젝트 밖이면 API 전에 거절."""
+    if not JIRA_PROJECTS:
+        return
+    prefix = key.split("-", 1)[0]
+    if prefix not in JIRA_PROJECTS:
+        raise ValueError(
+            f"JIRA_PROJECTS_FILTER에 없는 프로젝트: {prefix} (허용: {sorted(JIRA_PROJECTS)})")
+
+
+def _space_denied(space: str | None) -> dict | None:
+    if CONF_SPACES and space not in CONF_SPACES:
+        return {"space": space,
+                "error": f"CONFLUENCE_SPACES_FILTER에 없는 스페이스 (허용: {sorted(CONF_SPACES)})"}
+    return None
+
+
+def _require_conf_space(id: str) -> dict | None:
+    """ID 도구용. 필터가 있으면 본문 없이 스페이스만 확인."""
+    if not CONF_SPACES:
+        return None
+    data = _cget(f"/rest/api/content/{id}", expand="space")
+    return _space_denied((data.get("space") or {}).get("key"))
+
+
 # ---------- Jira 도구 ----------
 
 @mcp.tool
 def jira_search(jql: str, limit: int = 20) -> list[dict]:
     """JQL로 이슈를 검색하고 핵심 필드만 돌려준다."""
+    jql = _and_jql_projects(jql)
     data = _jget("/rest/api/3/search", jql=jql,
                  fields="summary,status,assignee,priority,labels,updated,project",
-                 maxResults=min(limit, MAX_RESULTS))
+                 maxResults=_clamp_limit(limit))
     out = []
     for it in data.get("issues", []):
         f = it.get("fields", {})
@@ -221,6 +334,8 @@ def jira_search(jql: str, limit: int = 20) -> list[dict]:
 def jira_get(key: str, max_chars: int = 8000) -> dict:
     """이슈 상세. 설명·코멘트 본문은 max_chars로 절단."""
     _check_issue_key(key)
+    _check_issue_scope(key)
+    max_chars = _clamp_chars(max_chars)
     data = _jget(f"/rest/api/3/issue/{key}",
                  fields="summary,status,assignee,reporter,priority,issuetype,"
                         "labels,created,updated,description,comment")
@@ -253,7 +368,7 @@ def jira_get(key: str, max_chars: int = 8000) -> dict:
 def jira_my_tasks(limit: int = 20) -> list[dict]:
     """나에게 배정된 미해결 이슈 목록."""
     return jira_search("assignee = currentUser() AND resolution = unresolved",
-                       limit=limit)
+                       limit=_clamp_limit(limit))
 
 
 @mcp.tool
@@ -273,8 +388,9 @@ def jira_projects() -> list[dict]:
 @mcp.tool
 def confluence_search(cql: str, limit: int = 20, include_snippet: bool = False) -> list[dict]:
     """CQL로 페이지 검색. include_snippet=True면 본문 첫 200자 포함."""
+    cql = _and_cql_spaces(cql)
     data = _cget("/rest/api/content/search", cql=cql,
-                 limit=min(limit, MAX_RESULTS),
+                 limit=_clamp_limit(limit),
                  expand="body.storage" if include_snippet else None)
     out = []
     for it in data.get("results", []):
@@ -295,7 +411,11 @@ def confluence_search(cql: str, limit: int = 20, include_snippet: bool = False) 
 @mcp.tool
 def confluence_get_children(id: str, limit: int = 50) -> list[dict]:
     """페이지의 하위 페이지 목록(id, 제목)."""
-    data = _cget(f"/rest/api/content/{id}/child/page", limit=min(limit, MAX_RESULTS))
+    _check_content_id(id)
+    denied = _require_conf_space(id)
+    if denied:
+        return [denied]
+    data = _cget(f"/rest/api/content/{id}/child/page", limit=_clamp_limit(limit))
     return [{"id": p.get("id"), "title": p.get("title"),
              "url": f"{CONF_URL}/pages/{p.get('id')}"}
             for p in data.get("results", [])]
@@ -304,11 +424,13 @@ def confluence_get_children(id: str, limit: int = 50) -> list[dict]:
 @mcp.tool
 def confluence_space_tree(space_key: str, max_depth: int = 2, limit: int = 100) -> dict:
     """스페이스의 페이지 트리. max_depth까지 제목만, 본문 없음."""
+    _check_space_key(space_key)
     if CONF_SPACES and space_key not in CONF_SPACES:
         return {"space": space_key,
                 "error": f"CONFLUENCE_SPACES_FILTER에 없는 스페이스 (허용: {sorted(CONF_SPACES)})"}
+    max_depth = _clamp_depth(max_depth)
     data = _cget("/rest/api/content", spaceKey=space_key, type="page",
-                 expand="ancestors", limit=min(limit, 100))
+                 expand="ancestors", limit=_clamp_limit(limit, cap=100))
     raw = [{"id": p.get("id"), "title": p.get("title"),
             "depth": len(p.get("ancestors") or []),
             "parent_id": (p.get("ancestors") or [{}])[-1].get("id") if p.get("ancestors") else None}
@@ -331,8 +453,13 @@ def confluence_space_tree(space_key: str, max_depth: int = 2, limit: int = 100) 
 @mcp.tool
 def confluence_get(id: str, max_chars: int = 8000) -> dict:
     """페이지 본문을 plain text로 돌려준다. max_chars로 절단."""
+    _check_content_id(id)
+    max_chars = _clamp_chars(max_chars)
     data = _cget(f"/rest/api/content/{id}", expand="body.storage,space")
     sp = (data.get("space") or {}).get("key")
+    denied = _space_denied(sp)
+    if denied:
+        return denied
     storage = (data.get("body") or {}).get("storage", {}).get("value", "")
     return {
         "id": data.get("id"),
@@ -346,8 +473,13 @@ def confluence_get(id: str, max_chars: int = 8000) -> dict:
 @mcp.tool
 def confluence_get_comments(id: str, limit: int = 50, max_chars: int = 1500) -> list[dict]:
     """페이지에 달린 댓글 목록. 본문은 max_chars로 절단."""
+    _check_content_id(id)
+    denied = _require_conf_space(id)
+    if denied:
+        return [denied]
+    max_chars = _clamp_chars(max_chars)
     data = _cget(f"/rest/api/content/{id}/child/comment",
-                 limit=min(limit, MAX_RESULTS), expand="body.storage")
+                 limit=_clamp_limit(limit), expand="body.storage")
     out = []
     for c in data.get("results", []):
         body = (c.get("body") or {}).get("storage", {}).get("value", "")

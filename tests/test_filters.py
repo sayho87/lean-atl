@@ -11,6 +11,7 @@ import sys
 sys.path.insert(0, ".")
 import lean_atlassian as la
 from fastmcp import Client
+from fastmcp.exceptions import ToolError
 
 fails = []
 
@@ -34,6 +35,11 @@ def unit() -> None:
     os.environ["JIRA_PROJECTS_FILTER"] = "PROJ,DEV"
     la_re2 = importlib.reload(la_re)
     check("JIRA=PROJ,DEV", la_re2._filter_proj([{"key": "PROJ"}, {"key": "TEST"}]), [{"key": "PROJ"}])
+    check("JQL AND", la_re2._and_jql_projects("text ~ foo ORDER BY created"),
+          '(text ~ foo) AND project IN ("DEV", "PROJ") ORDER BY created')
+    check("한도 음수", la_re2._clamp_limit(-1), 1)
+    check("한도 과다", la_re2._clamp_limit(999999), la_re2.MAX_RESULTS)
+    check("본문 과다", la_re2._clamp_chars(10_000_000), la_re2.BODY_CHARS)
 
 
 async def integration() -> None:
@@ -57,6 +63,15 @@ async def integration() -> None:
         data = getattr(r, "data", r)
         keys = [x.get("space") for x in data]
         check("search 필터(DEV만)", keys, ["DEV", "DEV"])
+        try:
+            r = await c.call_tool("jira_get", {"key": "TEST-1"})
+            msg = str(getattr(r, "data", r))
+        except ToolError as e:
+            msg = str(e)
+        check("jira_get 범위 밖 차단", "없는 프로젝트" in msg, True)
+        r = await c.call_tool("confluence_get", {"id": "12345"})
+        check("confluence_get DEV 허용",
+              getattr(r, "data", r).get("id"), "12345")
 
 
 async def main() -> None:
