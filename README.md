@@ -147,7 +147,7 @@ Server/DC(PAT)를 쓴다면 `JIRA_PERSONAL_TOKEN`·`CONFLUENCE_PERSONAL_TOKEN`�
 
 ### 문서 탐색 순서 예시
 1. `confluence_spaces` → 어떤 스페이스가 있는지
-2. `confluence_space_tree(space_key, max_depth=3)` → 스페이스 구조 파악
+2. `confluence_space_tree(space_key, max_depth=5)` → 스페이스 구조 파악
 3. `confluence_search(cql, include_snippet=True)` → 원하는 문서 검색 (스니펫으로 판별)
 4. `confluence_get(id)` → 문서 본문 읽기
 5. `confluence_get_children(id)` → 하위 문서로 이어서 읽기
