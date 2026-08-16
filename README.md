@@ -114,6 +114,22 @@ Server/DC(PAT) 예시: `JIRA_PERSONAL_TOKEN`·`CONFLUENCE_PERSONAL_TOKEN`만 채
 4. `confluence_get(id)` → 문서 본문 읽기
 5. `confluence_get_children(id)` → 하위 문서로 파고들기
 
+## 보안 검토 (mcp-atlassian 대비)
+
+**결론: mcp-atlassian보다 공격 표면이 작고, 쓰기 도구가 없어 피해 범위가 제한적.**
+
+- **읽기 전용** — 쓰기 도구(생성/수정/삭제/전이/첨부)가 없어, LLM이 잘못된 도구를 호출해도 데이터 변경 불가 (mcp-atlassian은 쓰기 도구 다수 보유)
+- **토큰 노출 경로 없음** — 토큰은 env에서 읽어 Authorization 헤더로만 사용. 코드·로그·에러 메시지·도구 출력에 토큰이 나오는 경로 없음 (grep 검증)
+- **리다이렉트 미허용** — httpx 기본값(follow_redirects=False) 유지 → 리다이렉트로 다른 호스트에 자격증명이 전송될 위험 없음
+- **의존성 2개** (fastmcp, httpx) vs mcp-atlassian 28개 → 공급망 공격 표면 축소
+- **stdio 전용** — 네트워크 리스닝 없음 (mcp-atlassian은 HTTP/S SE 지원으로 노출 시 인증 필요)
+
+**한계 (사용자 책임 영역):**
+- HTTPS가 아니면 평문 전송 — 반드시 `https://` URL 사용
+- `*_SSL_VERIFY=false`는 MITM 위험 — 자체 서명 인증서가 아니면 끄지 말 것
+- `CONFLUENCE_SPACES_FILTER`/`JIRA_PROJECTS_FILTER`는 편의 필터이지 보안 경계가 아님 — 실제 권한 통제는 Atlassian 측 프로젝트/스페이스 권한이 담당 (mcp-atlassian도 동일)
+- mcp-atlassian이 가진 OAuth 2.0, mTLS, 프록시 헤더 인증(IGNORE_HEADER_AUTH) 등은 미지원 — 로컬 단일 사용자 시나리오 기준으로는 불필요
+
 ## 테스트 (실 API 키 없이)
 
 ```bash
