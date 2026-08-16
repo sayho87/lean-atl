@@ -65,22 +65,33 @@ BODY_CHARS = int(os.environ.get("LEAN_BODY_CHARS", "8000"))
 CONF_SPACES = {s.strip() for s in os.environ.get("CONFLUENCE_SPACES_FILTER", "").split(",") if s.strip()}
 JIRA_PROJECTS = {s.strip() for s in os.environ.get("JIRA_PROJECTS_FILTER", "").split(",") if s.strip()}
 
+# --- 보안: 이슈키 형식 검증 / mTLS (mcp-atlassian과 동일 변수명·기본 패턴) ---
+ISSUE_KEY_RE = re.compile(os.environ.get(
+    "JIRA_ISSUE_KEY_PATTERN", r"^[A-Z][A-Z0-9_]+-\d+(?:-\d+)*$"))
+JIRA_CERT = _first("JIRA_CLIENT_CERT")
+JIRA_CERT_KEY = _first("JIRA_CLIENT_KEY")
+CONF_CERT = _first("CONFLUENCE_CLIENT_CERT")
+CONF_CERT_KEY = _first("CONFLUENCE_CLIENT_KEY")
+
 _jira: httpx.Client | None = None
 _conf: httpx.Client | None = None
 
 
-def _make_client(url: str, username: str, api_token: str, pat: str, ssl: bool) -> httpx.Client:
+def _make_client(url: str, username: str, api_token: str, pat: str, ssl: bool,
+                 cert: str = "", cert_key: str = "") -> httpx.Client:
     if not url:
         raise RuntimeError(
             "URL 환경변수 필요 (JIRA_URL / CONFLUENCE_URL 또는 ATLASSIAN_SITE_URL)")
+    # mTLS: 결합 PEM이면 cert만, 분리면 (cert, key)
+    cert_arg: Any = (cert, cert_key) if cert_key else (cert or None)
     if pat:
         # Server/Data Center: Personal Access Token (Bearer)
         return httpx.Client(base_url=url, headers={"Authorization": f"Bearer {pat}"},
-                            verify=ssl, timeout=30)
+                            verify=ssl, cert=cert_arg, timeout=30)
     if username and api_token:
         # Cloud: Basic Auth (email + API token)
         return httpx.Client(base_url=url, auth=(username, api_token),
-                            verify=ssl, timeout=30)
+                            verify=ssl, cert=cert_arg, timeout=30)
     raise RuntimeError(
         f"인증 환경변수 필요 ({url}): API_TOKEN+USERNAME (Cloud) 또는 PERSONAL_TOKEN (Server/DC)")
 
@@ -88,14 +99,16 @@ def _make_client(url: str, username: str, api_token: str, pat: str, ssl: bool) -
 def jira_client() -> httpx.Client:
     global _jira
     if _jira is None:
-        _jira = _make_client(JIRA_URL, JIRA_USERNAME, JIRA_API_TOKEN, JIRA_PAT, JIRA_SSL)
+        _jira = _make_client(JIRA_URL, JIRA_USERNAME, JIRA_API_TOKEN, JIRA_PAT, JIRA_SSL,
+                             JIRA_CERT, JIRA_CERT_KEY)
     return _jira
 
 
 def conf_client() -> httpx.Client:
     global _conf
     if _conf is None:
-        _conf = _make_client(CONF_URL, CONF_USERNAME, CONF_API_TOKEN, CONF_PAT, CONF_SSL)
+        _conf = _make_client(CONF_URL, CONF_USERNAME, CONF_API_TOKEN, CONF_PAT, CONF_SSL,
+                             CONF_CERT, CONF_CERT_KEY)
     return _conf
 
 
@@ -170,6 +183,13 @@ def _filter_proj(results: list[dict]) -> list[dict]:
     return [r for r in results if r.get("key") in JIRA_PROJECTS]
 
 
+def _check_issue_key(key: str) -> None:
+    """이슈키 형식 검증 (기본: PROJ-123, 커스텀: JIRA_ISSUE_KEY_PATTERN)."""
+    if not ISSUE_KEY_RE.match(key):
+        raise ValueError(
+            f"이슈키 형식이 아님: {key!r} (허용 패턴: {ISSUE_KEY_RE.pattern})")
+
+
 # ---------- Jira 도구 ----------
 
 @mcp.tool
@@ -200,6 +220,7 @@ def jira_search(jql: str, limit: int = 20) -> list[dict]:
 @mcp.tool
 def jira_get(key: str, max_chars: int = 8000) -> dict:
     """이슈 상세. 설명·코멘트 본문은 max_chars로 절단."""
+    _check_issue_key(key)
     data = _jget(f"/rest/api/3/issue/{key}",
                  fields="summary,status,assignee,reporter,priority,issuetype,"
                         "labels,created,updated,description,comment")

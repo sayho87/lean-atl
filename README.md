@@ -53,6 +53,13 @@ uv pip install --python .venv/bin/python fastmcp httpx
 | `JIRA_PERSONAL_TOKEN` / `CONFLUENCE_PERSONAL_TOKEN` | PAT (Bearer 인증, Jira는 REST v2 자동 전환) |
 | `JIRA_SSL_VERIFY` / `CONFLUENCE_SSL_VERIFY` | `false` 시 SSL 검증 해제 (기본 `true`) |
 
+**보안 (mTLS / 키 검증):**
+| 변수 | 설명 |
+|---|---|
+| `JIRA_CLIENT_CERT` / `CONFLUENCE_CLIENT_CERT` | mTLS 클라이언트 인증서 PEM 경로 (결합 or 인증서만) |
+| `JIRA_CLIENT_KEY` / `CONFLUENCE_CLIENT_KEY` | 개인키가 분리된 경우 PEM 경로 |
+| `JIRA_ISSUE_KEY_PATTERN` | 이슈키 허용 정규식 (기본 `^[A-Z][A-Z0-9_]+-\d+(?:-\d+)*$`) |
+
 **공통:**
 | 변수 | 설명 |
 |---|---|
@@ -119,16 +126,19 @@ Server/DC(PAT) 예시: `JIRA_PERSONAL_TOKEN`·`CONFLUENCE_PERSONAL_TOKEN`만 채
 **결론: mcp-atlassian보다 공격 표면이 작고, 쓰기 도구가 없어 피해 범위가 제한적.**
 
 - **읽기 전용** — 쓰기 도구(생성/수정/삭제/전이/첨부)가 없어, LLM이 잘못된 도구를 호출해도 데이터 변경 불가 (mcp-atlassian은 쓰기 도구 다수 보유)
+- **이슈키 형식 검증** — `jira_get`의 key를 API 호출 전에 정규식으로 검증 (`JIRA_ISSUE_KEY_PATTERN`, mcp-atlassian과 동일 기본 패턴). `../../admin` 같은 입력은 API에 도달하기 전에 거부
+- **mTLS 지원** — `JIRA_CLIENT_CERT`(+`KEY`) / `CONFLUENCE_CLIENT_CERT`(+`KEY`)로 Server/DC mTLS 대응 (mcp-atlassian과 동일 변수명)
 - **토큰 노출 경로 없음** — 토큰은 env에서 읽어 Authorization 헤더로만 사용. 코드·로그·에러 메시지·도구 출력에 토큰이 나오는 경로 없음 (grep 검증)
 - **리다이렉트 미허용** — httpx 기본값(follow_redirects=False) 유지 → 리다이렉트로 다른 호스트에 자격증명이 전송될 위험 없음
 - **의존성 2개** (fastmcp, httpx) vs mcp-atlassian 28개 → 공급망 공격 표면 축소
 - **stdio 전용** — 네트워크 리스닝 없음 (mcp-atlassian은 HTTP/S SE 지원으로 노출 시 인증 필요)
+- **보안 기능 추가로 토큰 영향 없음** — 키 검증·mTLS·SSL_VERIFY는 서버 코드/환경변수 영역이라 도구 스키마가 변하지 않음 (실측: 1,394B 유지)
 
 **한계 (사용자 책임 영역):**
 - HTTPS가 아니면 평문 전송 — 반드시 `https://` URL 사용
 - `*_SSL_VERIFY=false`는 MITM 위험 — 자체 서명 인증서가 아니면 끄지 말 것
 - `CONFLUENCE_SPACES_FILTER`/`JIRA_PROJECTS_FILTER`는 편의 필터이지 보안 경계가 아님 — 실제 권한 통제는 Atlassian 측 프로젝트/스페이스 권한이 담당 (mcp-atlassian도 동일)
-- mcp-atlassian이 가진 OAuth 2.0, mTLS, 프록시 헤더 인증(IGNORE_HEADER_AUTH) 등은 미지원 — 로컬 단일 사용자 시나리오 기준으로는 불필요
+- OAuth 2.0 / 프록시 헤더 인증(IGNORE_HEADER_AUTH)은 **HTTP 배포(멀티 사용자) 시나리오 전용**이라 stdio 로컬에선 적용될 환경이 없어 미지원 — 로컬 단일 사용자에선 토큰·PAT이 더 단순하고 동등한 수준
 
 ## 테스트 (실 API 키 없이)
 
