@@ -25,7 +25,9 @@ MCP에서 LLM은 **세션마다 모든 도구 정의 스키마를 다시 전송*
 ## 설치 및 실행
 
 ```bash
+# 1) 가상환경 생성
 uv venv .venv
+# 2) 의존성 설치
 uv pip install --python .venv/bin/python fastmcp httpx
 ```
 
