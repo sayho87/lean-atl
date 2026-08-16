@@ -36,6 +36,8 @@ uv pip install --python .venv/bin/python fastmcp httpx
 | `ATLASSIAN_SITE_URL` | 예: `https://your-domain.atlassian.net` |
 | `ATLASSIAN_USER_EMAIL` | 계정 이메일 |
 | `ATLASSIAN_API_TOKEN` | https://id.atlassian.com/manage-profile/security/api-tokens |
+| `CONFLUENCE_SPACES_FILTER` | 허용 스페이스만 (콤마 구분, 예: `DEV,PM`) |
+| `JIRA_PROJECTS_FILTER` | 허용 프로젝트만 (콤마 구분, 예: `PROJ,TEST`) |
 | `LEAN_MAX_RESULTS` | 목록 기본 캡 (기본 20) |
 | `LEAN_BODY_CHARS` | 본문 기본 캡 (기본 8000) |
 

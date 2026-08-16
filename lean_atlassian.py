@@ -32,6 +32,8 @@ EMAIL = os.environ.get("ATLASSIAN_USER_EMAIL", "")
 TOKEN = os.environ.get("ATLASSIAN_API_TOKEN", "")
 MAX_RESULTS = int(os.environ.get("LEAN_MAX_RESULTS", "20"))
 BODY_CHARS = int(os.environ.get("LEAN_BODY_CHARS", "8000"))
+CONF_SPACES = {s.strip() for s in os.environ.get("CONFLUENCE_SPACES_FILTER", "").split(",") if s.strip()}
+JIRA_PROJECTS = {s.strip() for s in os.environ.get("JIRA_PROJECTS_FILTER", "").split(",") if s.strip()}
 
 _client: httpx.Client | None = None
 
@@ -103,19 +105,37 @@ def _user(f: dict, key: str) -> str | None:
     return u.get("displayName") if isinstance(u, dict) else None
 
 
+def _filter_conf(results: list[dict]) -> list[dict]:
+    """CONFLUENCE_SPACES_FILTER 적용 (key 또는 space 기준). 필터 미설정이면 그대로."""
+    if not CONF_SPACES:
+        return results
+    return [r for r in results if (r.get("key") or r.get("space")) in CONF_SPACES]
+
+
+def _filter_proj(results: list[dict]) -> list[dict]:
+    """JIRA_PROJECTS_FILTER 적용 (key 기준). 필터 미설정이면 그대로."""
+    if not JIRA_PROJECTS:
+        return results
+    return [r for r in results if r.get("key") in JIRA_PROJECTS]
+
+
 # ---------- Jira 도구 ----------
 
 @mcp.tool
 def jira_search(jql: str, limit: int = 20) -> list[dict]:
     """JQL로 이슈를 검색하고 핵심 필드만 돌려준다."""
     data = _get("/rest/api/3/search", jql=jql,
-                fields="summary,status,assignee,priority,labels,updated",
+                fields="summary,status,assignee,priority,labels,updated,project",
                 maxResults=min(limit, MAX_RESULTS))
     out = []
     for it in data.get("issues", []):
         f = it.get("fields", {})
+        proj = (f.get("project") or {}).get("key")
+        if JIRA_PROJECTS and proj not in JIRA_PROJECTS:
+            continue
         out.append({
             "key": it.get("key"),
+            "project": proj,
             "summary": f.get("summary"),
             "status": (f.get("status") or {}).get("name"),
             "assignee": _user(f, "assignee"),
@@ -168,8 +188,8 @@ def jira_my_tasks(limit: int = 20) -> list[dict]:
 def jira_projects() -> list[dict]:
     """프로젝트 목록(key, 이름)."""
     data = _get("/rest/api/3/project/search", maxResults=100)
-    return [{"key": p.get("key"), "name": p.get("name")}
-            for p in data.get("values", [])]
+    return _filter_proj([{"key": p.get("key"), "name": p.get("name")}
+                         for p in data.get("values", [])])
 
 
 # ---------- Confluence 도구 ----------
@@ -193,7 +213,7 @@ def confluence_search(cql: str, limit: int = 20, include_snippet: bool = False) 
             storage = (it.get("body") or {}).get("storage", {}).get("value", "")
             item["snippet"] = _html_to_text(storage, 200)
         out.append(item)
-    return out
+    return _filter_conf(out)
 
 
 @mcp.tool
@@ -208,6 +228,8 @@ def confluence_get_children(id: str, limit: int = 50) -> list[dict]:
 @mcp.tool
 def confluence_space_tree(space_key: str, max_depth: int = 2, limit: int = 100) -> dict:
     """스페이스의 페이지 트리. max_depth까지 제목만, 본문 없음."""
+    if CONF_SPACES and space_key not in CONF_SPACES:
+        return {"space": space_key, "error": f"CONFLUENCE_SPACES_FILTER에 없는 스페이스 (허용: {sorted(CONF_SPACES)})"}
     data = _get("/rest/api/content", spaceKey=space_key, type="page",
                 expand="ancestors", limit=min(limit, 100))
     raw = [{"id": p.get("id"), "title": p.get("title"),
@@ -265,10 +287,10 @@ def confluence_get_comments(id: str, limit: int = 50, max_chars: int = 1500) -> 
 
 @mcp.tool
 def confluence_spaces() -> list[dict]:
-    """스페이스 목록(key, 이름)."""
+    """스페이스 목록(key, 이름). CONFLUENCE_SPACES_FILTER 적용."""
     data = _get("/rest/api/space", limit=50)
-    return [{"key": s.get("key"), "name": s.get("name"), "type": s.get("type")}
-            for s in data.get("results", [])]
+    return _filter_conf([{"key": s.get("key"), "name": s.get("name"), "type": s.get("type")}
+                         for s in data.get("results", [])])
 
 
 if __name__ == "__main__":

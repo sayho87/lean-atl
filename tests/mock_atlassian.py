@@ -8,6 +8,7 @@ PORT = 8765
 ISSUE = {
     "id": "10101", "key": "TEST-1",
     "fields": {
+        "project": {"key": "TEST"},
         "summary": "로그인 페이지 버튼 정렬 오류",
         "status": {"name": "In Progress"},
         "assignee": {"displayName": "홍길동"},
