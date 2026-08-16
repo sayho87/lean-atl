@@ -1,6 +1,6 @@
 # lean-atl
 
-mcp-atlassian보다 토큰을 아껴 먹는 로컬 Jira/Confluence MCP 서버.
+mcp-atlassian보다 토큰을 절약하는 로컬 Jira/Confluence MCP 서버.
 
 ## 왜 가벼운가 (실측)
 
@@ -13,14 +13,14 @@ MCP에서 LLM은 **세션마다 모든 도구 정의 스키마를 다시 전송*
 | mcp-atlassian `ENABLED_TOOLS` 4종만 | 5 | 7,292 B | ~1,800 |
 | **lean-atl (이 서버)** | **10** | **1,394 B** | **~350** |
 
-- 기본 상태 대비 **도구 91% 감소, 스키마 98% 감소 (~16,000 tokens/세션 절약)**
-- mcp-atlassian을 최대한 꺼서 5개 도구만 써도, 이 서버는 9개 도구로 더 싸다 (스키마 평균 134B vs 그쪽 1,458B/tool)
+- 기본 상태 대비 **도구 91% 감소, 스키마 98% 감소 (세션당 약 16,000토큰 절약)**
+- mcp-atlassian을 최소 구성(5개 도구)으로 줄여도, 이 서버는 10개 도구로 더 가볍다 (스키마 평균 139B vs 1,458B)
 
 ### 토큰 절약 설계 원칙
-1. **도구 10개** — mcp-atlassian의 98개 중 실제 쓰는 핵심만 (검색/조회/생성/전이/댓글/목록)
+1. **도구 10개** — mcp-atlassian의 98개 중 실제 쓰는 핵심만 (검색/조회/댓글/목록)
 2. **docstring 한 줄, 파라미터 설명 최소** — 스키마가 평균 132B
 3. **결과 축약** — 목록은 `limit` 캡, 설명/댓글/본문은 `max_chars`로 서버에서 절단
-4. **Confluence HTML → plain text 변환** 후 반환 (원본 HTML 토큰 낭비 제거)
+4. **Confluence HTML → plain text 변환** 후 반환 (원본 HTML의 불필요한 토큰 소비 방지)
 5. **Jira REST도 `fields=` 명시** — 와이어 응답 자체를 작게
 
 ## 설치 및 실행
@@ -96,7 +96,7 @@ uv pip install --python .venv/bin/python fastmcp httpx
 }
 ```
 
-Server/DC(PAT) 예시: `JIRA_PERSONAL_TOKEN`·`CONFLUENCE_PERSONAL_TOKEN`만 채우고
+Server/DC(PAT)를 쓴다면 `JIRA_PERSONAL_TOKEN`·`CONFLUENCE_PERSONAL_TOKEN`만 채우고
 `JIRA_SSL_VERIFY=false` 등을 추가하면 된다.
 
 ## 도구 목록 (탐색 위주 10개)
@@ -114,19 +114,19 @@ Server/DC(PAT) 예시: `JIRA_PERSONAL_TOKEN`·`CONFLUENCE_PERSONAL_TOKEN`만 채
 | `confluence_space_tree` | 스페이스 페이지 트리 (max_depth, 제목만) |
 | `confluence_spaces` | 스페이스 목록 |
 
-### 문서 탐색 워크플로 예시
+### 문서 탐색 순서 예시
 1. `confluence_spaces` → 어떤 스페이스가 있는지
 2. `confluence_space_tree(space_key, max_depth=2)` → 스페이스 구조 파악
 3. `confluence_search(cql, include_snippet=True)` → 원하는 문서 검색 (스니펫으로 판별)
 4. `confluence_get(id)` → 문서 본문 읽기
-5. `confluence_get_children(id)` → 하위 문서로 파고들기
+5. `confluence_get_children(id)` → 하위 문서로 이어서 읽기
 
 ## 보안 검토 (mcp-atlassian 대비)
 
 **결론: mcp-atlassian보다 공격 표면이 작고, 쓰기 도구가 없어 피해 범위가 제한적.**
 
 - **읽기 전용** — 쓰기 도구(생성/수정/삭제/전이/첨부)가 없어, LLM이 잘못된 도구를 호출해도 데이터 변경 불가 (mcp-atlassian은 쓰기 도구 다수 보유)
-- **스코프 필터는 강제 경계** — `JIRA_PROJECTS_FILTER`는 JQL에 AND로 붙고, `jira_get`은 프로젝트 접두가 허용 목록 밖이면 API 전에 거절. `CONFLUENCE_SPACES_FILTER`는 CQL에 AND로 붙고, `confluence_get`/`get_children`/`get_comments`/`space_tree`도 허용 밖이면 본문을 돌려주지 않음 (mcp-atlassian과 같은 방식)
+- **스코프 필터는 강제 경계** — `JIRA_PROJECTS_FILTER`는 JQL에 AND로 붙고, `jira_get`은 프로젝트 접두가 허용 목록에 없으면 API 호출 전에 거절. `CONFLUENCE_SPACES_FILTER`는 CQL에 AND로 붙고, `confluence_get`/`get_children`/`get_comments`/`space_tree`도 허용 밖이면 본문을 돌려주지 않음 (mcp-atlassian과 같은 방식)
 - **경로 조작 차단** — 컨플루언스 `id`는 숫자만, 스페이스 키는 영문·숫자·밑줄만. `../../admin` 같은 입력은 URL에 붙이기 전에 거절
 - **출력 한도 강제** — `limit`/`max_chars`는 `LEAN_MAX_RESULTS`/`LEAN_BODY_CHARS`로 자르고 음수는 1로 올림. `LEAN_BODY_CHARS`가 실제로 적용됨
 - **이슈키 형식 검증** — `jira_get`의 key를 API 호출 전에 정규식으로 검증 (`JIRA_ISSUE_KEY_PATTERN`, mcp-atlassian과 동일 기본 패턴)
@@ -140,8 +140,8 @@ Server/DC(PAT) 예시: `JIRA_PERSONAL_TOKEN`·`CONFLUENCE_PERSONAL_TOKEN`만 채
 **한계 (사용자 책임 영역):**
 - HTTPS가 아니면 평문 전송 — 반드시 `https://` URL 사용
 - `*_SSL_VERIFY=false`는 MITM 위험 — 자체 서명 인증서가 아니면 끄지 말 것
-- `CONFLUENCE_SPACES_FILTER`/`JIRA_PROJECTS_FILTER`는 이제 검색 질의에 강제 AND되고 단건 조회도 막는다. 다만 진짜 권한 통제의 마지막 선은 여전히 Atlassian 측 프로젝트/스페이스 권한이다.
-- OAuth 2.0 / 프록시 헤더 인증(IGNORE_HEADER_AUTH)은 **HTTP 배포(멀티 사용자) 시나리오 전용**이라 stdio 로컬에선 적용될 환경이 없어 미지원 — 로컬 단일 사용자에선 토큰·PAT이 더 단순하고 동등한 수준
+- `CONFLUENCE_SPACES_FILTER`/`JIRA_PROJECTS_FILTER`는 검색 질의에 강제로 AND되고 단건 조회도 막는다. 다만 진짜 권한 통제의 마지막 선은 여전히 Atlassian 측 프로젝트/스페이스 권한이다.
+- OAuth 2.0 / 프록시 헤더 인증(IGNORE_HEADER_AUTH)은 **HTTP 배포(멀티 사용자) 시나리오 전용**이라 stdio 로컬에선 적용될 환경이 없어 미지원 — 로컬 단일 사용자에선 토큰·PAT이 더 단순하면서 같은 수준의 보안을 제공한다
 
 ## 테스트 (실 API 키 없이)
 
@@ -151,11 +151,11 @@ Server/DC(PAT) 예시: `JIRA_PERSONAL_TOKEN`·`CONFLUENCE_PERSONAL_TOKEN`만 채
 .venv/bin/python tests/measure_schema.py     # 스키마 크기 벤치마크
 ```
 
-## 참고: mcp-atlassian의 도구 온오프 (비교용)
+## 참고: mcp-atlassian의 도구 구성 옵션 (비교용)
 
 mcp-atlassian도 필터링을 지원하지만 한계가 있다:
 - `TOOLSETS=default` → 35개, `TOOLSETS=all` → 98개 (현재 기본값은 전체, v0.22.0부터 default로 변경 예정)
 - `ENABLED_TOOLS=도구명1,도구명2` → 개별 허용 목록 (`TOOLSETS`와 교집합)
 - Jira만 / Confluence만 설치 구성 가능, `READ_ONLY_MODE`, `JIRA_PROJECTS_FILTER` 등 범위 제한도 있음
-- **함정**: 문서의 도구명 예시(`jira_search_issues` 등)가 실제 배포판과 다르다 — 이 버전 실제 이름은 `search`, `get_issue`, `get_page` 등. 이름이 안 맞으면 도구가 0개로 fail-closed된다.
-- 남는 문제: 35개로 줄여도 스키마 자체가 무겁고(평균 ~700B/tool), 개별 도구 스키마의 긴 설명이 그대로 전송된다.
+- **주의점**: 문서의 도구명 예시(`jira_search_issues` 등)가 실제 배포판과 다르다 — 이 버전의 실제 이름은 `search`, `get_issue`, `get_page` 등. 이름이 맞지 않으면 도구가 0개가 되어 동작하지 않는다.
+- 남은 한계: 35개로 줄여도 스키마 자체가 무겁고(평균 ~700B/tool), 개별 도구 스키마의 긴 설명이 그대로 전송된다.
