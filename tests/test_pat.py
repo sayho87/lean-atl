@@ -5,7 +5,7 @@ import os
 import sys
 
 sys.path.insert(0, ".")
-import lean_atlassian as la
+import lean_atl as la
 from fastmcp import Client
 
 fails = []

@@ -1,4 +1,4 @@
-# lean-atlassian-mcp
+# lean-atl
 
 mcp-atlassian보다 토큰을 아껴 먹는 로컬 Jira/Confluence MCP 서버.
 
@@ -11,7 +11,7 @@ MCP에서 LLM은 **세션마다 모든 도구 정의 스키마를 다시 전송*
 | mcp-atlassian (기본, TOOLSETS 미설정) | 98 | 65,295 B | ~16,300 |
 | mcp-atlassian `TOOLSETS=default` | 35 | 32,177 B | ~8,000 |
 | mcp-atlassian `ENABLED_TOOLS` 4종만 | 5 | 7,292 B | ~1,800 |
-| **lean-atlassian (이 서버)** | **10** | **1,394 B** | **~350** |
+| **lean-atl (이 서버)** | **10** | **1,394 B** | **~350** |
 
 - 기본 상태 대비 **도구 91% 감소, 스키마 98% 감소 (~16,000 tokens/세션 절약)**
 - mcp-atlassian을 최대한 꺼서 5개 도구만 써도, 이 서버는 9개 도구로 더 싸다 (스키마 평균 134B vs 그쪽 1,458B/tool)
@@ -78,9 +78,9 @@ uv pip install --python .venv/bin/python fastmcp httpx
 ```json
 {
   "mcpServers": {
-    "lean-atlassian": {
-      "command": "/Users/howoomac/Projects/lean-atlassian-mcp/.venv/bin/python",
-      "args": ["/Users/howoomac/Projects/lean-atlassian-mcp/lean_atlassian.py"],
+    "lean-atl": {
+      "command": "/Users/howoomac/Projects/lean-atl/.venv/bin/python",
+      "args": ["/Users/howoomac/Projects/lean-atl/lean_atl.py"],
       "env": {
         "JIRA_URL": "https://your-domain.atlassian.net",
         "JIRA_USERNAME": "you@company.com",

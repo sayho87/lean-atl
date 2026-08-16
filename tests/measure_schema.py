@@ -1,4 +1,4 @@
-"""도구 정의 스키마 토큰 비교: lean-atlassian vs mcp-atlassian.
+"""도구 정의 스키마 토큰 비교: lean-atl vs mcp-atlassian.
 
 도구 스키마 JSON 바이트를 합산해 LLM이 매 세션에 지불하는
 도구 정의 비용의 근사치를 낸다 (토큰 ≈ bytes / 4).
@@ -27,11 +27,11 @@ def report(label: str, n: int, b: int) -> None:
 
 
 async def main() -> None:
-    # 1) lean-atlassian (env 없이 import 가능)
+    # 1) lean-atl (env 없이 import 가능)
     sys.path.insert(0, ".")
-    import lean_atlassian  # noqa: F401
-    n1, b1, _ = await schema_bytes(lean_atlassian.mcp)
-    report("lean-atlassian", n1, b1)
+    import lean_atl  # noqa: F401
+    n1, b1, _ = await schema_bytes(lean_atl.mcp)
+    report("lean-atl", n1, b1)
 
     # 2) mcp-atlassian — Jira/Confluence 서버 분리, 전부 vs TOOLSETS=default
     from mcp_atlassian.servers.confluence import confluence_mcp

@@ -1,4 +1,4 @@
-"""lean-atlassian-mcp — mcp-atlassian(98 tools)보다 토큰을 아껴 먹는 Jira/Confluence MCP.
+"""lean-atl — mcp-atlassian(98 tools)보다 토큰을 아껴 먹는 Jira/Confluence MCP.
 
 절약 설계:
 - 도구 10개 (mcp-atlassian의 98개 대비) → 매 요청마다 전송되는 도구 정의 스키마가 1/10
@@ -30,7 +30,7 @@ from typing import Any
 import httpx
 from fastmcp import FastMCP
 
-mcp = FastMCP("lean-atlassian")
+mcp = FastMCP("lean-atl")
 
 
 def _first(*names: str) -> str:
@@ -90,7 +90,7 @@ CONF_CERT_KEY = _first("CONFLUENCE_CLIENT_KEY")
 
 _jira: httpx.Client | None = None
 _conf: httpx.Client | None = None
-_UA = {"User-Agent": "lean-atlassian-mcp/1.0"}
+_UA = {"User-Agent": "lean-atl/1.0 (https://github.com/sayho87/lean-atl)"}
 
 
 def _make_client(url: str, username: str, api_token: str, pat: str, ssl: bool,

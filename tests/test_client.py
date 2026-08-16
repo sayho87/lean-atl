@@ -9,12 +9,12 @@ os.environ["ATLASSIAN_USER_EMAIL"] = "test@test.com"
 os.environ["ATLASSIAN_API_TOKEN"] = "fake"
 
 sys.path.insert(0, ".")
-import lean_atlassian  # noqa: E402
+import lean_atl  # noqa: E402
 from fastmcp import Client  # noqa: E402
 
 
 async def main() -> None:
-    async with Client(lean_atlassian.mcp) as c:
+    async with Client(lean_atl.mcp) as c:
         tools = await c.list_tools()
         print(f"도구 수: {len(tools)}")
         calls = [

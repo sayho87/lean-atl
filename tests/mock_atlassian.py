@@ -1,4 +1,4 @@
-"""Mock Atlassian REST 서버 — lean-atlassian-mcp 검증용 (실 API 키 없이 테스트)."""
+"""Mock Atlassian REST 서버 — lean-atl 검증용 (실 API 키 없이 테스트)."""
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse

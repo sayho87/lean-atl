@@ -12,7 +12,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, ".")
-import lean_atlassian as la
+import lean_atl as la
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
 
