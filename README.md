@@ -1,8 +1,31 @@
 # lean-atl
 
+<p align="center"><strong>10 tools. 1.4KB. 98% fewer tokens.</strong></p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license">
+  <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+">
+</p>
+
 가벼운 **읽기전용** 로컬 Jira/Confluence MCP 서버.
 클라우드와 서버/데이터센터(Data Center) 배포를 모두 지원한다.
 도구 10개, 도구 정의 스키마 1.4KB — 세션당 약 350토큰만 전송한다.
+
+**목차:** [왜 lean-atl인가](#왜-lean-atl인가) · [왜 가벼운가](#왜-가벼운가) · [설치 및 실행](#설치-및-실행) · [환경변수](#환경변수) · [도구 목록](#도구-목록-10개) · [보안 설계](#보안-설계) · [테스트](#테스트-실-api-키-없이)
+
+## 왜 lean-atl인가
+
+```mermaid
+flowchart TD
+    A["MCP: LLM은 세션마다 모든 도구 정의를 전송받는다"] --> B{"도구 정의가 많으면?"}
+    B -->|"mcp-atlassian: 98개"| C["65,295B ≈ 16,300토큰<br/>매 턴 고정 소비"]
+    B -->|"안 쓰는 도구도 정의만큼 토큰을 먹는다"| D["실제 사용 도구는 하나뿐인데도"]
+    C --> E["lean-atl의 해법"]
+    D --> E
+    E --> F["핵심 도구 10개만 — 1,394B ≈ 350토큰"]
+    E --> G["스키마 압축 — docstring 한 줄, 평균 139B/도구"]
+    E --> H["출력 축약 — limit 캡, 본문 앞부분만, HTML → text"]
+```
 
 ## 왜 가벼운가
 
