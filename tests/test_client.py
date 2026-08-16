@@ -26,6 +26,7 @@ async def main() -> None:
             ("confluence_search", {"cql": 'text ~ "릴리스"', "limit": 5, "include_snippet": True}),
             ("confluence_get", {"id": "12345", "max_chars": 120}),
             ("confluence_get_children", {"id": "12345"}),
+            ("confluence_get_comments", {"id": "12345", "max_chars": 500}),
             ("confluence_space_tree", {"space_key": "DEV", "max_depth": 3}),
             ("confluence_spaces", {}),
         ]

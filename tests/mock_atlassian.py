@@ -61,6 +61,15 @@ CHILDREN = {"results": [
     {"id": "12351", "title": "3.2 프론트엔드 변경점", "space": {"key": "DEV"}},
 ]}
 
+COMMENTS = {"results": [
+    {"id": "30001", "author": {"displayName": "홍길동"},
+     "created": "2026-08-16T09:00:00.000+0900",
+     "body": {"storage": {"value": "<p>3.2에 배포 일정이 빠져 있어요.</p>"}}},
+    {"id": "30002", "author": {"displayName": "김기획"},
+     "created": "2026-08-16T11:30:00.000+0900",
+     "body": {"storage": {"value": "<p>일정 추가했습니다. <a href='#'>링크</a> 참고.</p>"}}},
+]}
+
 # spaceKey=DEV 트리: A(최상위) → A-1 → A-1-1, B(최상위)
 SPACE_PAGES = {"results": [
     {"id": "20001", "title": "개발 가이드", "space": {"key": "DEV"}, "ancestors": []},
@@ -113,6 +122,8 @@ class H(BaseHTTPRequestHandler):
             self._json({"results": results})
         elif p.startswith("/rest/api/content/12345/child/page"):
             self._json(CHILDREN)
+        elif p.startswith("/rest/api/content/12345/child/comment"):
+            self._json(COMMENTS)
         elif p == "/rest/api/content" and parse_qs(u.query).get("spaceKey", [""])[0] == "DEV":
             self._json(SPACE_PAGES)
         elif p.startswith("/rest/api/content/12345"):

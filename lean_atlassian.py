@@ -245,6 +245,25 @@ def confluence_get(id: str, max_chars: int = 8000) -> dict:
 
 
 @mcp.tool
+def confluence_get_comments(id: str, limit: int = 50, max_chars: int = 1500) -> list[dict]:
+    """페이지에 달린 댓글 목록. 본문은 max_chars로 절단."""
+    data = _get(f"/rest/api/content/{id}/child/comment",
+                limit=min(limit, MAX_RESULTS), expand="body.storage")
+    out = []
+    for c in data.get("results", []):
+        body = (c.get("body") or {}).get("storage", {}).get("value", "")
+        author = (c.get("author") or {}).get("displayName") or \
+                 (c.get("version") or {}).get("by", {}).get("displayName")
+        out.append({
+            "id": c.get("id"),
+            "author": author,
+            "created": c.get("created"),
+            "body": _html_to_text(body, max_chars),
+        })
+    return out
+
+
+@mcp.tool
 def confluence_spaces() -> list[dict]:
     """스페이스 목록(key, 이름)."""
     data = _get("/rest/api/space", limit=50)

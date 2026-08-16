@@ -11,7 +11,7 @@ MCP에서 LLM은 **세션마다 모든 도구 정의 스키마를 다시 전송*
 | mcp-atlassian (기본, TOOLSETS 미설정) | 98 | 65,295 B | ~16,300 |
 | mcp-atlassian `TOOLSETS=default` | 35 | 32,177 B | ~8,000 |
 | mcp-atlassian `ENABLED_TOOLS` 4종만 | 5 | 7,292 B | ~1,800 |
-| **lean-atlassian (이 서버)** | **9** | **1,206 B** | **~300** |
+| **lean-atlassian (이 서버)** | **10** | **1,394 B** | **~350** |
 
 - 기본 상태 대비 **도구 91% 감소, 스키마 98% 감소 (~16,000 tokens/세션 절약)**
 - mcp-atlassian을 최대한 꺼서 5개 도구만 써도, 이 서버는 9개 도구로 더 싸다 (스키마 평균 134B vs 그쪽 1,458B/tool)
@@ -68,6 +68,7 @@ uv pip install --python .venv/bin/python fastmcp httpx
 | `confluence_search` | CQL 검색 (`include_snippet` 옵션으로 본문 200자 미리보기) |
 | `confluence_get` | 페이지 본문 (text, max_chars 절단) |
 | `confluence_get_children` | 하위 페이지 목록 |
+| `confluence_get_comments` | 페이지 댓글 목록 (본문 절단) |
 | `confluence_space_tree` | 스페이스 페이지 트리 (max_depth, 제목만) |
 | `confluence_spaces` | 스페이스 목록 |
 
