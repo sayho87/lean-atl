@@ -56,6 +56,21 @@ PAGE = {
     "body": {"storage": {"value": "<p>3.2 릴리스 내용</p><ul><li>버그 12건 수정</li><li>성능 개선 30%</li></ul><p>자세한 내용은 <a href='#'>링크</a> 참고.</p>"}},
 }
 
+CHILDREN = {"results": [
+    {"id": "12350", "title": "3.2 백엔드 변경점", "space": {"key": "DEV"}},
+    {"id": "12351", "title": "3.2 프론트엔드 변경점", "space": {"key": "DEV"}},
+]}
+
+# spaceKey=DEV 트리: A(최상위) → A-1 → A-1-1, B(최상위)
+SPACE_PAGES = {"results": [
+    {"id": "20001", "title": "개발 가이드", "space": {"key": "DEV"}, "ancestors": []},
+    {"id": "20002", "title": "API 문서", "space": {"key": "DEV"},
+     "ancestors": [{"id": "20001", "title": "개발 가이드"}]},
+    {"id": "20003", "title": "인증 API", "space": {"key": "DEV"},
+     "ancestors": [{"id": "20001", "title": "개발 가이드"}, {"id": "20002", "title": "API 문서"}]},
+    {"id": "20004", "title": "배포 프로세스", "space": {"key": "DEV"}, "ancestors": []},
+]}
+
 
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):
@@ -85,13 +100,21 @@ class H(BaseHTTPRequestHandler):
             self._json(PROJECTS)
         elif p == "/rest/api/content/search":
             cql = parse_qs(u.query).get("cql", [""])[0]
+            expand = parse_qs(u.query).get("expand", [""])[0]
             results = [
                 {"id": "12345", "title": "릴리스 노트 3.2", "space": {"key": "DEV"}},
                 {"id": "12346", "title": "릴리스 노트 3.1", "space": {"key": "DEV"}},
             ]
             if "3.2" in cql:
                 results = results[:1]
+            if "body.storage" in expand:
+                for r in results:
+                    r["body"] = {"storage": {"value": PAGE["body"]["storage"]["value"]}}
             self._json({"results": results})
+        elif p.startswith("/rest/api/content/12345/child/page"):
+            self._json(CHILDREN)
+        elif p == "/rest/api/content" and parse_qs(u.query).get("spaceKey", [""])[0] == "DEV":
+            self._json(SPACE_PAGES)
         elif p.startswith("/rest/api/content/12345"):
             self._json(PAGE)
         elif p == "/rest/api/space":

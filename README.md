@@ -11,10 +11,10 @@ MCP에서 LLM은 **세션마다 모든 도구 정의 스키마를 다시 전송*
 | mcp-atlassian (기본, TOOLSETS 미설정) | 98 | 65,295 B | ~16,300 |
 | mcp-atlassian `TOOLSETS=default` | 35 | 32,177 B | ~8,000 |
 | mcp-atlassian `ENABLED_TOOLS` 4종만 | 5 | 7,292 B | ~1,800 |
-| **lean-atlassian (이 서버)** | **10** | **1,324 B** | **~330** |
+| **lean-atlassian (이 서버)** | **9** | **1,206 B** | **~300** |
 
-- 기본 상태 대비 **도구 90% 감소, 스키마 98% 감소 (~16,000 tokens/세션 절약)**
-- mcp-atlassian을 최대한 꺼서 5개 도구만 써도, 이 서버는 10개 도구로 더 싸다 (스키마 평균 132B vs 그쪽 1,458B/tool)
+- 기본 상태 대비 **도구 91% 감소, 스키마 98% 감소 (~16,000 tokens/세션 절약)**
+- mcp-atlassian을 최대한 꺼서 5개 도구만 써도, 이 서버는 9개 도구로 더 싸다 (스키마 평균 134B vs 그쪽 1,458B/tool)
 
 ### 토큰 절약 설계 원칙
 1. **도구 10개** — mcp-atlassian의 98개 중 실제 쓰는 핵심만 (검색/조회/생성/전이/댓글/목록)
@@ -57,20 +57,26 @@ uv pip install --python .venv/bin/python fastmcp httpx
 }
 ```
 
-## 도구 목록
+## 도구 목록 (탐색 위주 9개)
 
 | 도구 | 설명 |
 |---|---|
 | `jira_search` | JQL 검색 (핵심 필드만) |
 | `jira_get` | 이슈 상세 (설명/댓글 절단) |
-| `jira_create` | 이슈 생성 |
-| `jira_transition` | 상태 변경 |
-| `jira_comment` | 댓글 추가 |
 | `jira_my_tasks` | 내 미해결 이슈 |
 | `jira_projects` | 프로젝트 목록 |
-| `confluence_search` | CQL 검색 |
-| `confluence_get` | 페이지 본문 (text) |
+| `confluence_search` | CQL 검색 (`include_snippet` 옵션으로 본문 200자 미리보기) |
+| `confluence_get` | 페이지 본문 (text, max_chars 절단) |
+| `confluence_get_children` | 하위 페이지 목록 |
+| `confluence_space_tree` | 스페이스 페이지 트리 (max_depth, 제목만) |
 | `confluence_spaces` | 스페이스 목록 |
+
+### 문서 탐색 워크플로 예시
+1. `confluence_spaces` → 어떤 스페이스가 있는지
+2. `confluence_space_tree(space_key, max_depth=2)` → 스페이스 구조 파악
+3. `confluence_search(cql, include_snippet=True)` → 원하는 문서 검색 (스니펫으로 판별)
+4. `confluence_get(id)` → 문서 본문 읽기
+5. `confluence_get_children(id)` → 하위 문서로 파고들기
 
 ## 테스트 (실 API 키 없이)
 

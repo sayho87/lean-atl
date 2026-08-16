@@ -98,13 +98,6 @@ def _adf_text(adf: dict | None, max_chars: int) -> str:
     return s[:max_chars] + "…" if len(s) > max_chars else s
 
 
-def _text_to_adf(text: str) -> dict:
-    paras = [p for p in text.split("\n") if p.strip()]
-    return {"type": "doc", "version": 1,
-            "content": [{"type": "paragraph",
-                         "content": [{"type": "text", "text": p}]} for p in paras]}
-
-
 def _user(f: dict, key: str) -> str | None:
     u = f.get(key)
     return u.get("displayName") if isinstance(u, dict) else None
@@ -165,46 +158,6 @@ def jira_get(key: str, max_chars: int = 8000) -> dict:
 
 
 @mcp.tool
-def jira_create(project: str, summary: str, type: str = "Task", description: str = "") -> dict:
-    """이슈 생성. project는 키(예: PROJ), type은 이슈유형 표시 이름."""
-    fields: dict = {"project": {"key": project}, "summary": summary,
-                    "issuetype": {"name": type}}
-    if description:
-        fields["description"] = _text_to_adf(description)
-    r = _post("/rest/api/3/issue", {"fields": fields})
-    key = r.get("key")
-    return {"key": key, "url": f"{SITE}/browse/{key}"}
-
-
-@mcp.tool
-def jira_transition(key: str, status: str) -> dict:
-    """이슈 상태를 변경한다. status는 표시 이름(예: In Progress, Done)."""
-    data = _get(f"/rest/api/3/issue/{key}/transitions")
-    target = None
-    for tr in data.get("transitions", []):
-        if tr.get("to", {}).get("name", "").lower() == status.lower() or \
-           tr.get("name", "").lower() == status.lower():
-            target = tr
-            break
-    if target is None:
-        names = [f"{t.get('to', {}).get('name')}({t.get('id')})"
-                 for t in data.get("transitions", [])]
-        return {"error": f"가능한 상태: {', '.join(names)}"}
-    _post(f"/rest/api/3/issue/{key}/transitions",
-          {"transition": {"id": target["id"]}})
-    return {"key": key, "status": target.get("to", {}).get("name")}
-
-
-@mcp.tool
-def jira_comment(key: str, body: str) -> dict:
-    """이슈에 코멘트를 추가한다."""
-    r = _post(f"/rest/api/3/issue/{key}/comment",
-              {"body": _text_to_adf(body)})
-    return {"key": key, "comment_id": r.get("id"),
-            "url": f"{SITE}/browse/{key}?focusedCommentId={r.get('id')}"}
-
-
-@mcp.tool
 def jira_my_tasks(limit: int = 20) -> list[dict]:
     """나에게 배정된 미해결 이슈 목록."""
     return jira_search("assignee = currentUser() AND resolution = unresolved",
@@ -222,20 +175,58 @@ def jira_projects() -> list[dict]:
 # ---------- Confluence 도구 ----------
 
 @mcp.tool
-def confluence_search(cql: str, limit: int = 20) -> list[dict]:
-    """CQL로 페이지를 검색하고 핵심 필드만 돌려준다."""
+def confluence_search(cql: str, limit: int = 20, include_snippet: bool = False) -> list[dict]:
+    """CQL로 페이지 검색. include_snippet=True면 본문 첫 200자 포함."""
     data = _get("/rest/api/content/search", cql=cql,
-                limit=min(limit, MAX_RESULTS))
+                limit=min(limit, MAX_RESULTS),
+                expand="body.storage" if include_snippet else None)
     out = []
     for it in data.get("results", []):
         sp = (it.get("space") or {}).get("key")
-        out.append({
+        item = {
             "id": it.get("id"),
             "title": it.get("title"),
             "space": sp,
             "url": f"{SITE}/spaces/{sp}/pages/{it.get('id')}",
-        })
+        }
+        if include_snippet:
+            storage = (it.get("body") or {}).get("storage", {}).get("value", "")
+            item["snippet"] = _html_to_text(storage, 200)
+        out.append(item)
     return out
+
+
+@mcp.tool
+def confluence_get_children(id: str, limit: int = 50) -> list[dict]:
+    """페이지의 하위 페이지 목록(id, 제목)."""
+    data = _get(f"/rest/api/content/{id}/child/page", limit=min(limit, MAX_RESULTS))
+    return [{"id": p.get("id"), "title": p.get("title"),
+             "url": f"{SITE}/pages/{p.get('id')}"}
+            for p in data.get("results", [])]
+
+
+@mcp.tool
+def confluence_space_tree(space_key: str, max_depth: int = 2, limit: int = 100) -> dict:
+    """스페이스의 페이지 트리. max_depth까지 제목만, 본문 없음."""
+    data = _get("/rest/api/content", spaceKey=space_key, type="page",
+                expand="ancestors", limit=min(limit, 100))
+    raw = [{"id": p.get("id"), "title": p.get("title"),
+            "depth": len(p.get("ancestors") or []),
+            "parent_id": (p.get("ancestors") or [{}])[-1].get("id") if p.get("ancestors") else None}
+           for p in data.get("results", [])]
+    nodes = {p["id"]: {"id": p["id"], "title": p["title"], "children": []} for p in raw}
+    roots = []
+    for p in raw:
+        node = nodes[p["id"]]
+        parent = nodes.get(p["parent_id"])
+        if p["depth"] > max_depth:
+            continue
+        if parent is not None:
+            parent["children"].append(node)
+        else:
+            roots.append(node)
+    return {"space": space_key, "max_depth": max_depth,
+            "page_count": len(raw), "roots": roots}
 
 
 @mcp.tool
