@@ -137,7 +137,7 @@ Server/DC(PAT)를 쓴다면 `JIRA_PERSONAL_TOKEN`·`CONFLUENCE_PERSONAL_TOKEN`�
 - **의존성 2개** (fastmcp, httpx)
 - **stdio 전용** — 네트워크 리스닝 없음
 
-**한계 (사용자 책임 영역):**
+**사용자 유의사항:**
 - HTTPS가 아니면 평문 전송 — 반드시 `https://` URL 사용
 - `*_SSL_VERIFY=false`는 MITM 위험 — 자체 서명 인증서가 아니면 끄지 말 것
 - 필터는 검색 질의와 단건 조회를 막지만, 최종 권한 통제는 Atlassian 측 프로젝트/스페이스 권한
