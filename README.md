@@ -80,6 +80,33 @@ uv pip install --python .venv\Scripts\python.exe fastmcp httpx
 > uv가 없는 환경이라면 공식 설치 스크립트를 써도 된다:
 > `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
 
+### 비개발자를 위한 설치 (AI 어시스턴트 활용)
+
+개발 환경이 익숙하지 않아도, AI 코딩 어시스턴트(안티그래비티 등)에게
+아래처럼 말하면 설치를 대신 진행해 준다.
+
+**1. AI 어시스턴트를 연다**
+
+안티그래비티가 없다면 터미널에서 `brew install --cask antigravity-cli`로
+설치하고 실행한다.
+
+**2. 아래 문장을 복사해서 붙여넣는다**
+
+> 이 깃헙 링크를 설치해줘: https://github.com/sayho87/lean-atl
+> 설치 과정에서 Personal Access Token처럼 내가 직접 입력해야 하는 부분은
+> **** 로 표시해주고, 어디에 입력해야 하는지 알려줘. 나머지는 네가 알아서 진행해줘.
+
+**3. AI가 알려준 부분만 직접 입력한다**
+
+AI가 "**** 여기에 입력하세요"라고 안내한 자리에 PAT를 직접 붙여넣는다.
+PAT는 Confluence(또는 Jira)에 로그인한 상태에서 **사용자 프로필 →
+Personal Access Token** 메뉴에서 발급받는다.
+
+**4. 동작을 확인한다**
+
+설치가 끝나면 "lean-atl로 Confluence 문서를 검색해봐"라고 입력해서
+실제로 동작하는지 확인한다.
+
 ## 환경변수
 
 mcp-atlassian과 동일한 변수명을 사용해 기존 설정을 그대로 쓸 수 있다.
