@@ -24,8 +24,10 @@ MCP에서 LLM은 **세션마다 모든 도구 정의 스키마를 다시 전송*
 
 ## 설치 및 실행
 
+### macOS
+
 ```bash
-# 0) uv 설치 (없을 때만, macOS)
+# 0) uv 설치 (없을 때만)
 brew install uv
 # 1) lean-atl 저장소 내려받기
 git clone https://github.com/sayho87/lean-atl.git
@@ -35,6 +37,23 @@ uv venv .venv
 # 3) 의존성 설치
 uv pip install --python .venv/bin/python fastmcp httpx
 ```
+
+### Windows (PowerShell)
+
+```powershell
+# 0) uv 설치 (없을 때만)
+winget install --id=astral-sh.uv
+# 1) lean-atl 저장소 내려받기
+git clone https://github.com/sayho87/lean-atl.git
+cd lean-atl
+# 2) 가상환경 생성 (uv가 Python 3.12를 자동으로 준비)
+uv venv .venv
+# 3) 의존성 설치 (Windows는 Scripts 경로)
+uv pip install --python .venv\Scripts\python.exe fastmcp httpx
+```
+
+> uv가 없는 환경이라면 공식 설치 스크립트를 써도 된다:
+> `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
 
 ## 환경변수
 
@@ -106,6 +125,8 @@ mcp-atlassian과 동일한 변수명을 사용해 기존 설정을 그대로 쓸
 
 Server/DC(PAT)를 쓴다면 `JIRA_PERSONAL_TOKEN`·`CONFLUENCE_PERSONAL_TOKEN`만 채우고
 `JIRA_SSL_VERIFY=false` 등을 추가하면 된다.
+
+> Windows라면 `command` 경로를 `.venv\Scripts\python.exe`로 바꾼다 (예: `C:\Users\you\Projects\lean-atl\.venv\Scripts\python.exe`).
 
 ## 도구 목록 (10개)
 
