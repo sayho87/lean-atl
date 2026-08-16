@@ -24,6 +24,7 @@ from __future__ import annotations
 import html
 import os
 import re
+import sys
 import time
 from typing import Any
 
@@ -515,4 +516,12 @@ def confluence_spaces() -> list[dict]:
 
 
 if __name__ == "__main__":
+    # 시작 로그 — stdout은 MCP 프로토콜 채널이므로 반드시 stderr로 출력
+    print("lean-atl: 읽기 전용 서버 (쓰기 도구 0개, 도구 10개)", file=sys.stderr)
+    if CONF_URL:
+        spaces = ",".join(sorted(CONF_SPACES)) or "전체"
+        print(f"lean-atl: Confluence {CONF_URL} | 스페이스 필터: {spaces}", file=sys.stderr)
+    if JIRA_URL:
+        projects = ",".join(sorted(JIRA_PROJECTS)) or "전체"
+        print(f"lean-atl: Jira {JIRA_URL} | 프로젝트 필터: {projects}", file=sys.stderr)
     mcp.run()
