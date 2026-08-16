@@ -24,6 +24,7 @@ from __future__ import annotations
 import html
 import os
 import re
+import time
 from typing import Any
 
 import httpx
@@ -89,6 +90,7 @@ CONF_CERT_KEY = _first("CONFLUENCE_CLIENT_KEY")
 
 _jira: httpx.Client | None = None
 _conf: httpx.Client | None = None
+_UA = {"User-Agent": "lean-atlassian-mcp/1.0"}
 
 
 def _make_client(url: str, username: str, api_token: str, pat: str, ssl: bool,
@@ -100,11 +102,12 @@ def _make_client(url: str, username: str, api_token: str, pat: str, ssl: bool,
     cert_arg: Any = (cert, cert_key) if cert_key else (cert or None)
     if pat:
         # Server/Data Center: Personal Access Token (Bearer)
-        return httpx.Client(base_url=url, headers={"Authorization": f"Bearer {pat}"},
+        return httpx.Client(base_url=url,
+                            headers={**_UA, "Authorization": f"Bearer {pat}"},
                             verify=ssl, cert=cert_arg, timeout=30)
     if username and api_token:
         # Cloud: Basic Auth (email + API token)
-        return httpx.Client(base_url=url, auth=(username, api_token),
+        return httpx.Client(base_url=url, headers=_UA, auth=(username, api_token),
                             verify=ssl, cert=cert_arg, timeout=30)
     raise RuntimeError(
         f"인증 환경변수 필요 ({url}): API_TOKEN+USERNAME (Cloud) 또는 PERSONAL_TOKEN (Server/DC)")
@@ -130,15 +133,24 @@ def _jget(path: str, **params: Any) -> dict:
     # Server/DC(Jira)는 REST v3 미지원 → v2 경로로 변환
     if JIRA_PAT and path.startswith("/rest/api/3"):
         path = "/rest/api/2" + path[len("/rest/api/3"):]
-    r = jira_client().get(path, params={k: v for k, v in params.items() if v is not None})
-    r.raise_for_status()
-    return r.json()
+    return _get_retry(jira_client(), path, params)
 
 
 def _cget(path: str, **params: Any) -> dict:
-    r = conf_client().get(path, params={k: v for k, v in params.items() if v is not None})
-    r.raise_for_status()
-    return r.json()
+    return _get_retry(conf_client(), path, params)
+
+
+def _get_retry(client: httpx.Client, path: str, params: dict) -> dict:
+    """429(속도 제한)면 1초 뒤 1회 재시도. 그 외 오류는 즉시 전달."""
+    clean = {k: v for k, v in params.items() if v is not None}
+    for attempt in range(2):
+        r = client.get(path, params=clean)
+        if r.status_code == 429 and attempt == 0:
+            time.sleep(1)
+            continue
+        r.raise_for_status()
+        return r.json()
+    raise RuntimeError(f"429 재시도 실패: {path}")
 
 
 # ---------- 변환 헬퍼 ----------
