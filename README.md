@@ -135,19 +135,19 @@ Server/DC(PAT)를 쓴다면 `JIRA_PERSONAL_TOKEN`·`CONFLUENCE_PERSONAL_TOKEN`�
 | 도구 | 설명 |
 |---|---|
 | `jira_search` | JQL 검색 (핵심 필드만) |
-| `jira_get` | 이슈 상세 (설명/댓글 절단) |
+| `jira_get` | 이슈 상세 (설명/댓글 앞부분만) |
 | `jira_my_tasks` | 내 미해결 이슈 |
 | `jira_projects` | 프로젝트 목록 |
 | `confluence_search` | CQL 검색 (`include_snippet` 옵션으로 본문 200자 미리보기) |
-| `confluence_get` | 페이지 본문 (text, max_chars 절단) |
+| `confluence_get` | 페이지 본문 (text, max_chars로 앞부분만) |
 | `confluence_get_children` | 하위 페이지 목록 |
-| `confluence_get_comments` | 페이지 댓글 목록 (본문 절단) |
+| `confluence_get_comments` | 페이지 댓글 목록 (본문 앞부분만) |
 | `confluence_space_tree` | 스페이스 페이지 트리 (max_depth, 제목만) |
 | `confluence_spaces` | 스페이스 목록 |
 
 ### 문서 탐색 순서 예시
 1. `confluence_spaces` → 어떤 스페이스가 있는지
-2. `confluence_space_tree(space_key, max_depth=2)` → 스페이스 구조 파악
+2. `confluence_space_tree(space_key, max_depth=3)` → 스페이스 구조 파악
 3. `confluence_search(cql, include_snippet=True)` → 원하는 문서 검색 (스니펫으로 판별)
 4. `confluence_get(id)` → 문서 본문 읽기
 5. `confluence_get_children(id)` → 하위 문서로 이어서 읽기

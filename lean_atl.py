@@ -434,7 +434,7 @@ def confluence_get_children(id: str, limit: int = 50) -> list[dict]:
 
 
 @mcp.tool
-def confluence_space_tree(space_key: str, max_depth: int = 2, limit: int = 100) -> dict:
+def confluence_space_tree(space_key: str, max_depth: int = 3, limit: int = 100) -> dict:
     """스페이스의 페이지 트리. max_depth까지 제목만, 본문 없음."""
     _check_space_key(space_key)
     if CONF_SPACES and space_key not in CONF_SPACES:
