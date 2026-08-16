@@ -64,6 +64,25 @@ minimal configuration (5 tools), lean-atl's 10 tools are lighter — 139B vs
 4. **Confluence HTML → plain text** — avoids unnecessary token consumption
 5. **Jira REST `fields=`** — keeps responses small
 
+### How this differs from compressing an existing server
+
+Another approach to saving tokens is a proxy that wraps an existing MCP server
+and compresses its tool descriptions (e.g.
+[atlassian-labs/mcp-compressor](https://github.com/atlassian-labs/mcp-compressor)).
+lean-atl takes a different path: instead of compressing an existing server, it
+**designs the server to be light from the start**.
+
+| | Compression proxy | lean-atl |
+|---|---|---|
+| Approach | Wrap an existing server, compress descriptions | Light by design from the start |
+| Tool count | Unchanged (descriptions only are compressed) | Only 10 core tools |
+| Setup | Requires an extra proxy layer | A single server |
+| Tool descriptions | High compression can make tools hard for the LLM to understand | Full descriptions kept for 10 tools |
+
+A compression proxy can push a server with many tools (94) down to ~500 tokens
+at its most aggressive level, while lean-atl uses 348 tokens for 10 tools and
+keeps each tool's description intact.
+
 ## Installation
 
 ### macOS
