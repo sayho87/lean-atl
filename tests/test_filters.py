@@ -31,6 +31,10 @@ def unit() -> None:
     os.environ["CONFLUENCE_SPACES_FILTER"] = "DEV"
     la_re = importlib.reload(la)
     check("CONF=DEV", la_re._filter_conf([{"key": "DEV"}, {"key": "PM"}]), [{"key": "DEV"}])
+    # 대소문자 무시: 응답 키가 소문자여도 필터(대문자 설정)와 매칭
+    check("CONF 대소문자 무시", la_re._filter_conf([{"key": "dev"}, {"key": "PM"}]), [{"key": "dev"}])
+    check("space_denied 대소문자", la_re._space_denied("dev"), None)
+    check("space_denied 거절", (la_re._space_denied("PM") or {}).get("error") is not None, True)
     # JIRA 필터 설정 후 reload
     os.environ["JIRA_PROJECTS_FILTER"] = "PROJ,DEV"
     la_re2 = importlib.reload(la_re)

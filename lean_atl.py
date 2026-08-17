@@ -77,6 +77,10 @@ BODY_CHARS = _env_int("LEAN_BODY_CHARS", 8000)
 _MAX_LIST_LIMIT = 100  # limit 명시 시 최대 상한 (2단계 캡: 기본 20, 명시 시 100까지)
 CONF_SPACES = {s.strip() for s in os.environ.get("CONFLUENCE_SPACES_FILTER", "").split(",") if s.strip()}
 JIRA_PROJECTS = {s.strip() for s in os.environ.get("JIRA_PROJECTS_FILTER", "").split(",") if s.strip()}
+# 매칭은 대소문자 무시(스페이스/프로젝트 키는 대소문자만 다른 표기가 같은 키를 가리킴),
+# 질의 생성은 원본 키 유지
+_CONF_SPACES_CF = {s.casefold() for s in CONF_SPACES}
+_JIRA_PROJECTS_CF = {s.casefold() for s in JIRA_PROJECTS}
 
 # --- 보안: 이슈키 형식 검증 / mTLS (mcp-atlassian과 동일 변수명·기본 패턴) ---
 _DEFAULT_ISSUE_KEY = r"^[A-Z][A-Z0-9_]+-\d+(?:-\d+)*$"
@@ -213,17 +217,17 @@ def _user(f: dict, key: str) -> str | None:
 
 
 def _filter_conf(results: list[dict]) -> list[dict]:
-    """CONFLUENCE_SPACES_FILTER 적용 (key 또는 space 기준). 필터 미설정이면 그대로."""
+    """CONFLUENCE_SPACES_FILTER 적용 (key 또는 space 기준, 대소문자 무시). 필터 미설정이면 그대로."""
     if not CONF_SPACES:
         return results
-    return [r for r in results if (r.get("key") or r.get("space")) in CONF_SPACES]
+    return [r for r in results if (r.get("key") or r.get("space") or "").casefold() in _CONF_SPACES_CF]
 
 
 def _filter_proj(results: list[dict]) -> list[dict]:
-    """JIRA_PROJECTS_FILTER 적용 (key 기준). 필터 미설정이면 그대로."""
+    """JIRA_PROJECTS_FILTER 적용 (key 기준, 대소문자 무시). 필터 미설정이면 그대로."""
     if not JIRA_PROJECTS:
         return results
-    return [r for r in results if r.get("key") in JIRA_PROJECTS]
+    return [r for r in results if (r.get("key") or "").casefold() in _JIRA_PROJECTS_CF]
 
 
 def _check_issue_key(key: str) -> None:
@@ -307,17 +311,17 @@ def _check_space_key(space_key: str) -> None:
 
 
 def _check_issue_scope(key: str) -> None:
-    """jira_get: 허용 프로젝트 밖이면 API 전에 거절."""
+    """jira_get: 허용 프로젝트 밖이면 API 전에 거절 (대소문자 무시)."""
     if not JIRA_PROJECTS:
         return
     prefix = key.split("-", 1)[0]
-    if prefix not in JIRA_PROJECTS:
+    if prefix.casefold() not in _JIRA_PROJECTS_CF:
         raise ValueError(
             f"JIRA_PROJECTS_FILTER에 없는 프로젝트: {prefix} (허용: {sorted(JIRA_PROJECTS)})")
 
 
 def _space_denied(space: str | None) -> dict | None:
-    if CONF_SPACES and space not in CONF_SPACES:
+    if CONF_SPACES and (space or "").casefold() not in _CONF_SPACES_CF:
         return {"space": space,
                 "error": f"CONFLUENCE_SPACES_FILTER에 없는 스페이스 (허용: {sorted(CONF_SPACES)})"}
     return None
@@ -455,7 +459,7 @@ def confluence_get_children(id: str, limit: Annotated[int, "목록 개수, 최�
 def confluence_space_tree(space_key: str, max_depth: int = 5, limit: int = 100) -> dict:
     """스페이스의 페이지 트리. max_depth까지 제목만, 본문 없음."""
     _check_space_key(space_key)
-    if CONF_SPACES and space_key not in CONF_SPACES:
+    if CONF_SPACES and space_key.casefold() not in _CONF_SPACES_CF:
         return {"space": space_key,
                 "error": f"CONFLUENCE_SPACES_FILTER에 없는 스페이스 (허용: {sorted(CONF_SPACES)})"}
     max_depth = _clamp_depth(max_depth)
