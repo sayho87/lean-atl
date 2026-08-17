@@ -4,7 +4,7 @@
 
 # lean-atl
 
-<p align="center"><strong>10 tools. 1.4KB. 98% fewer tokens.</strong></p>
+<p align="center"><strong>10 tools. 1.7KB. 97% fewer tokens.</strong></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license">
@@ -13,7 +13,7 @@
 
 A lightweight **read-only** local Jira/Confluence MCP server.
 Supports both Cloud and Server/Data Center deployments.
-10 tools with a 1.4KB tool-definition schema — only ~350 tokens per session.
+10 tools with a 1.7KB tool-definition schema — only ~423 tokens per session.
 
 **Contents:** [Why lean-atl](#why-lean-atl) · [Why it is light](#why-it-is-light) · [Installation](#installation) · [Environment variables](#environment-variables) · [Tools](#tools-10) · [Security design](#security-design) · [Testing](#testing-without-real-api-keys)
 
@@ -34,8 +34,8 @@ flowchart TD
     B -->|"Tool definitions are sent regardless of usage"| D["Even when only one tool is used"]
     C --> E["lean-atl's choice"]
     D --> E
-    E --> F["Only 10 core tools — 1,394B ≈ 350 tokens"]
-    E --> G["Compact schema — one-line docstring, ~139B/tool"]
+    E --> F["Only 10 core tools — 1,694B ≈ 423 tokens"]
+    E --> G["Compact schema — one-line docstring, ~169B/tool"]
     E --> H["Output trimming — limit caps, first N chars, HTML → text"]
 ```
 
@@ -47,19 +47,19 @@ fixed cost by design.
 
 | Configuration | Tools | Schema total | ≈ tokens |
 |---|---:|---:|---:|
-| **lean-atl** | **10** | **1,394 B** | **~350** |
+| **lean-atl** | **10** | **1,694 B** | **~423** |
 | MCP with many tools (default) | 98 | 65,295 B | ~16,300 |
 | MCP with many tools (TOOLSETS=default) | 35 | 32,177 B | ~8,000 |
 | MCP with many tools (ENABLED_TOOLS, 4) | 5 | 7,292 B | ~1,800 |
 
-Using the same API and auth, this is a **98% schema reduction (≈16,000 tokens
+Using the same API and auth, this is a **97% schema reduction (≈15,900 tokens
 saved per session)** compared with the default configuration. Even reduced to a
-minimal configuration (5 tools), lean-atl's 10 tools are lighter — 139B vs
+minimal configuration (5 tools), lean-atl's 10 tools are lighter — 169B vs
 1,458B average per tool.
 
 ### Token-saving design principles
 1. **10 tools** — only the essentials (search / view / comments / lists)
-2. **One-line docstrings, minimal parameter descriptions** — ~139B avg per tool
+2. **One-line docstrings, minimal parameter descriptions** — ~169B avg per tool
 3. **Trimmed results** — lists capped by `limit` (default 20, up to 100), bodies by `max_chars`
 4. **Confluence HTML → plain text** — strips `script`/`style` blocks entirely, avoiding unnecessary token consumption and script text leaking into context
 5. **Jira REST `fields=`** — keeps responses small
@@ -80,7 +80,7 @@ lean-atl takes a different path: instead of compressing an existing server, it
 | Tool descriptions | High compression can make tools hard for the LLM to understand | Full descriptions kept for 10 tools |
 
 A compression proxy can push a server with many tools (94) down to ~500 tokens
-at its most aggressive level, while lean-atl uses 348 tokens for 10 tools and
+at its most aggressive level, while lean-atl uses 423 tokens for 10 tools and
 keeps each tool's description intact.
 
 ## Installation
