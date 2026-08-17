@@ -60,7 +60,7 @@ MCP에서 LLM은 **세션마다 모든 도구 정의 스키마를 다시 전송*
 1. **도구 10개** — 실제 쓰는 핵심만 (검색/조회/댓글/목록)
 2. **docstring 한 줄, 파라미터 설명 최소** — 스키마 평균 139B
 3. **결과 축약** — 목록은 `limit` 캡 (기본 20, 최대 100), 본문은 `max_chars`로 서버에서 잘라 줍니다
-4. **Confluence HTML → plain text 변환** — 원본 HTML의 불필요한 토큰 소비를 막습니다
+4. **Confluence HTML → plain text 변환** — script/style을 통째로 제거해 원본 HTML의 불필요한 토큰 소비와 스크립트 텍스트 유입을 막습니다
 5. **Jira REST `fields=` 명시** — 응답 자체를 작게 유지합니다
 
 ### 토큰을 줄이는 다른 접근과의 차이
@@ -241,7 +241,7 @@ Server/DC(PAT)를 쓴다면 `JIRA_PERSONAL_TOKEN`·`CONFLUENCE_PERSONAL_TOKEN`�
 
 **쓰기 도구를 배제한 읽기 전용 서버 — 잘못된 호출이 데이터를 바꿀 수 없습니다.**
 
-- **읽기 전용** — 생성/수정/삭제/전이/첨부 도구가 없어, LLM이 잘못된 도구를 호출해도 데이터를 변경할 수 없습니다
+- **읽기 전용** — 생성/수정/삭제/전이/첨부 도구가 없어, LLM이 잘못된 도구를 호출해도 데이터를 변경할 수 없습니다. 서버 시작 시 "읽기 전용 서버 (쓰기 도구 0개)"를 로그로 알립니다
 - **스코프 필터는 강제 경계** — `JIRA_PROJECTS_FILTER`는 JQL에 AND, `CONFLUENCE_SPACES_FILTER`는 CQL에 AND로 붙습니다. 단건 조회(`jira_get`, `confluence_get` 등)도 허용 범위 밖이면 API 호출 전에 거절합니다
 - **경로 조작 차단** — 컨플루언스 `id`는 숫자만, 스페이스 키는 영문·숫자·밑줄만 받습니다. `../../admin` 같은 입력은 URL에 붙이기 전에 거절합니다
 - **출력 한도 강제** — `limit`/`max_chars`는 `LEAN_MAX_RESULTS`/`LEAN_BODY_CHARS` 상한으로 자르고 음수는 차단합니다
@@ -253,7 +253,7 @@ Server/DC(PAT)를 쓴다면 `JIRA_PERSONAL_TOKEN`·`CONFLUENCE_PERSONAL_TOKEN`�
 - **stdio 전용** — 네트워크 리스닝이 없습니다
 
 **사용자 유의사항:**
-- HTTPS가 아니면 평문 전송 — 반드시 `https://` URL을 사용하세요
+- HTTPS가 아니면 평문 전송 — 반드시 `https://` URL을 사용하세요 (http://로 설정하면 시작 로그에서 경고가 출력됩니다)
 - `*_SSL_VERIFY=false`는 MITM 위험 — 자체 서명 인증서가 아니면 끄지 마세요
 - 필터는 검색 질의와 단건 조회를 막지만, 최종 권한 통제는 Atlassian 측 프로젝트/스페이스 권한입니다
 - OAuth 2.0 / 프록시 헤더 인증은 HTTP 배포(멀티 사용자) 전용이라 stdio 로컬에선 지원하지 않습니다

@@ -61,7 +61,7 @@ minimal configuration (5 tools), lean-atl's 10 tools are lighter — 139B vs
 1. **10 tools** — only the essentials (search / view / comments / lists)
 2. **One-line docstrings, minimal parameter descriptions** — ~139B avg per tool
 3. **Trimmed results** — lists capped by `limit` (default 20, up to 100), bodies by `max_chars`
-4. **Confluence HTML → plain text** — avoids unnecessary token consumption
+4. **Confluence HTML → plain text** — strips `script`/`style` blocks entirely, avoiding unnecessary token consumption and script text leaking into context
 5. **Jira REST `fields=`** — keeps responses small
 
 ### How this differs from compressing an existing server
@@ -243,7 +243,8 @@ For Server/DC (PAT), just fill in `JIRA_PERSONAL_TOKEN` and
 **A read-only server with no write tools — a mistaken call cannot change data.**
 
 - **Read-only** — no create/update/delete/transition/attachment tools, so even
-  a wrong tool call cannot change data
+  a wrong tool call cannot change data. The startup log announces
+  "read-only server (0 write tools)"
 - **Scope filters are enforced** — `JIRA_PROJECTS_FILTER` is ANDed into JQL and
   `CONFLUENCE_SPACES_FILTER` into CQL. Single-item lookups (`jira_get`,
   `confluence_get`, ...) are rejected before the API call when outside the
@@ -264,7 +265,7 @@ For Server/DC (PAT), just fill in `JIRA_PERSONAL_TOKEN` and
 - **stdio only** — no network listening
 
 **Notes for users:**
-- Non-HTTPS transmits in plaintext — always use `https://` URLs
+- Non-HTTPS transmits in plaintext — always use `https://` URLs (an `http://` URL triggers a warning in the startup log)
 - `*_SSL_VERIFY=false` is a MITM risk — do not disable it unless you have a
   self-signed certificate
 - Filters block search queries and single-item lookups, but the final authority

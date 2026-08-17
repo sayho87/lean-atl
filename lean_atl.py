@@ -49,6 +49,14 @@ def _flag(name: str, default: bool = True) -> bool:
     return v not in ("false", "0", "off", "no")
 
 
+def _env_int(name: str, default: int) -> int:
+    """정수 환경변수 파싱. 오타·비정수면 기본값으로 폴백 (서버 시작 크래시 방지)."""
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
 # --- Jira 설정 ---
 JIRA_URL = _first("JIRA_URL", "ATLASSIAN_SITE_URL").rstrip("/")
 JIRA_USERNAME = _first("JIRA_USERNAME", "ATLASSIAN_USER_EMAIL")
@@ -64,8 +72,8 @@ CONF_PAT = _first("CONFLUENCE_PERSONAL_TOKEN")
 CONF_SSL = _flag("CONFLUENCE_SSL_VERIFY")
 
 # --- 출력 캡 / 스코프 필터 ---
-MAX_RESULTS = int(os.environ.get("LEAN_MAX_RESULTS", "20"))
-BODY_CHARS = int(os.environ.get("LEAN_BODY_CHARS", "8000"))
+MAX_RESULTS = _env_int("LEAN_MAX_RESULTS", 20)
+BODY_CHARS = _env_int("LEAN_BODY_CHARS", 8000)
 _MAX_LIST_LIMIT = 100  # limit 명시 시 최대 상한 (2단계 캡: 기본 20, 명시 시 100까지)
 CONF_SPACES = {s.strip() for s in os.environ.get("CONFLUENCE_SPACES_FILTER", "").split(",") if s.strip()}
 JIRA_PROJECTS = {s.strip() for s in os.environ.get("JIRA_PROJECTS_FILTER", "").split(",") if s.strip()}
