@@ -83,6 +83,9 @@ SPACE_PAGES = {"results": [
 
 
 class H(BaseHTTPRequestHandler):
+    # 5xx 재시도 검증용: FLAP-1은 첫 호출만 503, 이후 200
+    flap_count = 0
+
     def log_message(self, *a):
         pass
 
@@ -101,6 +104,12 @@ class H(BaseHTTPRequestHandler):
             self._json({"issues": [ISSUE]})
         elif p == "/rest/api/3/issue/TEST-1":
             self._json(ISSUE)
+        elif p == "/rest/api/3/issue/FLAP-1":
+            H.flap_count += 1
+            if H.flap_count == 1:
+                self._json({"error": "temporary server error"}, 503)
+            else:
+                self._json(ISSUE)
         elif p == "/rest/api/3/issue/TEST-1/transitions":
             self._json({"transitions": [
                 {"id": "31", "name": "진행 중", "to": {"name": "In Progress"}},

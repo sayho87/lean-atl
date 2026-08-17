@@ -44,7 +44,9 @@ def _first(*names: str) -> str:
 
 
 def _flag(name: str, default: bool = True) -> bool:
-    return os.environ.get(name, "true" if default else "false").strip().lower() != "false"
+    """false 계열 표현('false'/'0'/'off'/'no')이면 False, 그 외엔 True."""
+    v = os.environ.get(name, "true" if default else "false").strip().lower()
+    return v not in ("false", "0", "off", "no")
 
 
 # --- Jira 설정 ---
@@ -99,7 +101,9 @@ def _make_client(url: str, username: str, api_token: str, pat: str, ssl: bool,
     if not url:
         raise RuntimeError(
             "URL 환경변수 필요 (JIRA_URL / CONFLUENCE_URL 또는 ATLASSIAN_SITE_URL)")
-    # mTLS: 결합 PEM이면 cert만, 분리면 (cert, key)
+    # mTLS: 결합 PEM이면 cert만, 분리면 (cert, key). KEY만 있고 CERT가 없으면 명확한 오류.
+    if cert_key and not cert:
+        raise RuntimeError("클라이언트 인증서 KEY만 설정됨 — CERT(CLIENT_CERT) 경로도 함께 설정하세요")
     cert_arg: Any = (cert, cert_key) if cert_key else (cert or None)
     if pat:
         # Server/Data Center: Personal Access Token (Bearer)
@@ -142,23 +146,24 @@ def _cget(path: str, **params: Any) -> dict:
 
 
 def _get_retry(client: httpx.Client, path: str, params: dict) -> dict:
-    """429(속도 제한)면 1초 뒤 1회 재시도. 그 외 오류는 즉시 전달."""
+    """429(속도 제한)·5xx(서버 일시 오류)면 1초 뒤 1회 재시도. 그 외 오류는 즉시 전달."""
     clean = {k: v for k, v in params.items() if v is not None}
     for attempt in range(2):
         r = client.get(path, params=clean)
-        if r.status_code == 429 and attempt == 0:
+        if r.status_code in (429, 500, 502, 503) and attempt == 0:
             time.sleep(1)
             continue
         r.raise_for_status()
         return r.json()
-    raise RuntimeError(f"429 재시도 실패: {path}")
+    raise RuntimeError(f"재시도 실패: {path}")
 
 
 # ---------- 변환 헬퍼 ----------
 
 def _html_to_text(raw: str, max_chars: int) -> str:
-    """Confluence storage HTML → plain text, max_chars로 절단."""
-    s = re.sub(r"<(br|/p|/div|/li|/h[1-6]|/tr)[^>]*>", "\n", raw)
+    """Confluence storage HTML → plain text, max_chars로 절단. script/style은 통째로 제거."""
+    s = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", "", raw)
+    s = re.sub(r"<(br|/p|/div|/li|/h[1-6]|/tr)[^>]*>", "\n", s)
     s = re.sub(r"<li[^>]*>", "- ", s)
     s = re.sub(r"<[^>]+>", "", s)
     s = html.unescape(re.sub(r"[ \t]+", " ", s))
@@ -518,6 +523,10 @@ def confluence_spaces() -> list[dict]:
 if __name__ == "__main__":
     # 시작 로그 — stdout은 MCP 프로토콜 채널이므로 반드시 stderr로 출력
     print("lean-atl: 읽기 전용 서버 (쓰기 도구 0개, 도구 10개)", file=sys.stderr)
+    for name, u in (("Jira", JIRA_URL), ("Confluence", CONF_URL)):
+        if u.startswith("http://"):
+            print(f"lean-atl 경고: {name} URL이 HTTPS가 아닙니다 — "
+                  f"인증 토큰이 평문으로 전송될 수 있습니다 ({u})", file=sys.stderr)
     if CONF_URL:
         spaces = ",".join(sorted(CONF_SPACES)) or "전체"
         print(f"lean-atl: Confluence {CONF_URL} | 스페이스 필터: {spaces}", file=sys.stderr)
