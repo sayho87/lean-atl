@@ -189,6 +189,8 @@ when `*_PERSONAL_TOKEN` is set, otherwise Basic (Cloud API token).
 
 ### Client config example (Claude Desktop / Cursor)
 
+**Cloud (API token):**
+
 ```json
 {
   "mcpServers": {
@@ -210,8 +212,34 @@ when `*_PERSONAL_TOKEN` is set, otherwise Basic (Cloud API token).
 }
 ```
 
-For Server/DC (PAT), just fill in `JIRA_PERSONAL_TOKEN` and
-`CONFLUENCE_PERSONAL_TOKEN`, and add `JIRA_SSL_VERIFY=false` as needed.
+**Server/Data Center (PAT):**
+
+```json
+{
+  "mcpServers": {
+    "lean-atl": {
+      "command": "/Users/howoomac/Projects/lean-atl/.venv/bin/python",
+      "args": ["/Users/howoomac/Projects/lean-atl/lean_atl.py"],
+      "env": {
+        "CONFLUENCE_URL": "https://confluence.internal.com/confluence",
+        "CONFLUENCE_PERSONAL_TOKEN": "your_pat",
+        "CONFLUENCE_SSL_VERIFY": "false",
+        "CONFLUENCE_SPACES_FILTER": "DEV,PM",
+        "JIRA_URL": "https://jira.internal.com",
+        "JIRA_PERSONAL_TOKEN": "your_pat",
+        "JIRA_SSL_VERIFY": "false",
+        "JIRA_PROJECTS_FILTER": "PROJ"
+      }
+    }
+  }
+}
+```
+
+**Auth variable reference:**
+- **Cloud:** `*_USERNAME` + `*_API_TOKEN` (Basic) — host like `your-domain.atlassian.net`
+- **Server/Data Center:** `*_PERSONAL_TOKEN` (Bearer PAT) — self-hosted address
+- When `*_PERSONAL_TOKEN` is set, **PAT (Bearer) takes precedence**. API token
+  variables are not required alongside it; if both are present, only the PAT is used
 
 > On Windows, change `command` to `.venv\Scripts\python.exe`
 > (e.g. `C:\Users\you\Projects\lean-atl\.venv\Scripts\python.exe`).

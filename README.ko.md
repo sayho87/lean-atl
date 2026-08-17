@@ -188,6 +188,8 @@ Personal Access Token** 메뉴에서 발급받습니다.
 
 ### 클라이언트 설정 예시 (Claude Desktop / Cursor)
 
+**Cloud (API 토큰):**
+
 ```json
 {
   "mcpServers": {
@@ -209,8 +211,33 @@ Personal Access Token** 메뉴에서 발급받습니다.
 }
 ```
 
-Server/DC(PAT)를 쓴다면 `JIRA_PERSONAL_TOKEN`·`CONFLUENCE_PERSONAL_TOKEN`만
-채우고 `JIRA_SSL_VERIFY=false` 등을 추가하면 됩니다.
+**Server/Data Center (PAT):**
+
+```json
+{
+  "mcpServers": {
+    "lean-atl": {
+      "command": "/Users/howoomac/Projects/lean-atl/.venv/bin/python",
+      "args": ["/Users/howoomac/Projects/lean-atl/lean_atl.py"],
+      "env": {
+        "CONFLUENCE_URL": "https://confluence.internal.com/confluence",
+        "CONFLUENCE_PERSONAL_TOKEN": "your_pat",
+        "CONFLUENCE_SSL_VERIFY": "false",
+        "CONFLUENCE_SPACES_FILTER": "DEV,PM",
+        "JIRA_URL": "https://jira.internal.com",
+        "JIRA_PERSONAL_TOKEN": "your_pat",
+        "JIRA_SSL_VERIFY": "false",
+        "JIRA_PROJECTS_FILTER": "PROJ"
+      }
+    }
+  }
+}
+```
+
+**인증 변수 정리:**
+- **Cloud:** `*_USERNAME` + `*_API_TOKEN` (Basic) — 주소는 `your-domain.atlassian.net`
+- **Server/Data Center:** `*_PERSONAL_TOKEN` (Bearer PAT) — 주소는 자체 호스팅 주소
+- `*_PERSONAL_TOKEN`이 설정되면 **PAT(Bearer)가 우선**입니다. API 토큰 변수는 함께 있지 않아도 되고, 둘 다 있어도 PAT만 사용합니다
 
 > Windows라면 `command` 경로를 `.venv\Scripts\python.exe`로 바꿉니다
 > (예: `C:\Users\you\Projects\lean-atl\.venv\Scripts\python.exe`).
