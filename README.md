@@ -179,6 +179,7 @@ can be reused as-is.
 |---|---|
 | `CONFLUENCE_SPACES_FILTER` | Allowed spaces only (comma-separated, e.g. `DEV,PM`) |
 | `JIRA_PROJECTS_FILTER` | Allowed projects only (comma-separated, e.g. `PROJ,TEST`) |
+| `CONFLUENCE_HTTP_PROXY` / `CONFLUENCE_HTTPS_PROXY` | Corporate proxy (Jira: `JIRA_HTTP_PROXY`/`JIRA_HTTPS_PROXY`). Falls back to `HTTP_PROXY`/`HTTPS_PROXY` |
 | `LEAN_MAX_RESULTS` | Default list cap (default 20, up to 100 when specified) |
 | `LEAN_BODY_CHARS` | Default body cap (default 8000) |
 

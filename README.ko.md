@@ -178,6 +178,7 @@ Personal Access Token** 메뉴에서 발급받습니다.
 |---|---|
 | `CONFLUENCE_SPACES_FILTER` | 허용 스페이스만 (콤마 구분, 예: `DEV,PM`) |
 | `JIRA_PROJECTS_FILTER` | 허용 프로젝트만 (콤마 구분, 예: `PROJ,TEST`) |
+| `CONFLUENCE_HTTP_PROXY` / `CONFLUENCE_HTTPS_PROXY` | 회사망 프록시 경유 (Jira는 `JIRA_HTTP_PROXY`/`JIRA_HTTPS_PROXY`). 미설정 시 `HTTP_PROXY`/`HTTPS_PROXY` 사용 |
 | `LEAN_MAX_RESULTS` | 목록 기본 캡 (기본 20, 명시 시 최대 100) |
 | `LEAN_BODY_CHARS` | 본문 기본 캡 (기본 8000) |
 

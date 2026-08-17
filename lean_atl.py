@@ -109,8 +109,25 @@ _conf: httpx.Client | None = None
 _UA = {"User-Agent": "lean-atl/1.0 (https://github.com/sayho87/lean-atl)"}
 
 
+def _proxy_args(prefix: str) -> dict:
+    """서비스 프록시 env → httpx.Client 인자 (mcp-atlassian과 동일 변수명).
+
+    - CONFLUENCE_HTTPS_PROXY / CONFLUENCE_HTTP_PROXY (Jira는 JIRA_*) 또는
+      일반 HTTPS_PROXY / HTTP_PROXY를 읽는다.
+    - 하나만 있으면 proxy=로, http/https가 다르면 mounts=로 전달.
+    - 미설정이면 빈 dict (직접 연결).
+    """
+    h = _first(f"{prefix}_HTTP_PROXY", "HTTP_PROXY")
+    s = _first(f"{prefix}_HTTPS_PROXY", "HTTPS_PROXY")
+    if h and s and h != s:
+        return {"mounts": {"http://": httpx.Proxy(h), "https://": httpx.Proxy(s)}}
+    url = s or h
+    return {"proxy": url} if url else {}
+
+
 def _make_client(url: str, username: str, api_token: str, pat: str, ssl: bool,
-                 cert: str = "", cert_key: str = "") -> httpx.Client:
+                 cert: str = "", cert_key: str = "",
+                 proxy_args: dict | None = None) -> httpx.Client:
     if not url:
         raise RuntimeError(
             "URL 환경변수 필요 (JIRA_URL / CONFLUENCE_URL 또는 ATLASSIAN_SITE_URL)")
@@ -118,15 +135,14 @@ def _make_client(url: str, username: str, api_token: str, pat: str, ssl: bool,
     if cert_key and not cert:
         raise RuntimeError("클라이언트 인증서 KEY만 설정됨 — CERT(CLIENT_CERT) 경로도 함께 설정하세요")
     cert_arg: Any = (cert, cert_key) if cert_key else (cert or None)
+    common = {"verify": ssl, "cert": cert_arg, "timeout": 30, **(proxy_args or {})}
     if pat:
         # Server/Data Center: Personal Access Token (Bearer)
         return httpx.Client(base_url=url,
-                            headers={**_UA, "Authorization": f"Bearer {pat}"},
-                            verify=ssl, cert=cert_arg, timeout=30)
+                            headers={**_UA, "Authorization": f"Bearer {pat}"}, **common)
     if username and api_token:
         # Cloud: Basic Auth (email + API token)
-        return httpx.Client(base_url=url, headers=_UA, auth=(username, api_token),
-                            verify=ssl, cert=cert_arg, timeout=30)
+        return httpx.Client(base_url=url, headers=_UA, auth=(username, api_token), **common)
     raise RuntimeError(
         f"인증 환경변수 필요 ({url}): API_TOKEN+USERNAME (Cloud) 또는 PERSONAL_TOKEN (Server/DC)")
 
@@ -135,7 +151,7 @@ def jira_client() -> httpx.Client:
     global _jira
     if _jira is None:
         _jira = _make_client(JIRA_URL, JIRA_USERNAME, JIRA_API_TOKEN, JIRA_PAT, JIRA_SSL,
-                             JIRA_CERT, JIRA_CERT_KEY)
+                             JIRA_CERT, JIRA_CERT_KEY, _proxy_args("JIRA"))
     return _jira
 
 
@@ -143,7 +159,7 @@ def conf_client() -> httpx.Client:
     global _conf
     if _conf is None:
         _conf = _make_client(CONF_URL, CONF_USERNAME, CONF_API_TOKEN, CONF_PAT, CONF_SSL,
-                             CONF_CERT, CONF_CERT_KEY)
+                             CONF_CERT, CONF_CERT_KEY, _proxy_args("CONFLUENCE"))
     return _conf
 
 
