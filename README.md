@@ -60,7 +60,7 @@ minimal configuration (5 tools), lean-atl's 10 tools are lighter — 139B vs
 ### Token-saving design principles
 1. **10 tools** — only the essentials (search / view / comments / lists)
 2. **One-line docstrings, minimal parameter descriptions** — ~139B avg per tool
-3. **Trimmed results** — `limit` caps for lists, `max_chars` for bodies
+3. **Trimmed results** — lists capped by `limit` (default 20, up to 100), bodies by `max_chars`
 4. **Confluence HTML → plain text** — avoids unnecessary token consumption
 5. **Jira REST `fields=`** — keeps responses small
 
@@ -179,7 +179,7 @@ can be reused as-is.
 |---|---|
 | `CONFLUENCE_SPACES_FILTER` | Allowed spaces only (comma-separated, e.g. `DEV,PM`) |
 | `JIRA_PROJECTS_FILTER` | Allowed projects only (comma-separated, e.g. `PROJ,TEST`) |
-| `LEAN_MAX_RESULTS` | Default list cap (default 20) |
+| `LEAN_MAX_RESULTS` | Default list cap (default 20, up to 100 when specified) |
 | `LEAN_BODY_CHARS` | Default body cap (default 8000) |
 
 **Backward compatibility**: if `ATLASSIAN_SITE_URL` / `ATLASSIAN_USER_EMAIL` /

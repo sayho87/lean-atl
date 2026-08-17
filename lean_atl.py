@@ -26,7 +26,7 @@ import os
 import re
 import sys
 import time
-from typing import Any
+from typing import Annotated, Any
 
 import httpx
 from fastmcp import FastMCP
@@ -66,6 +66,7 @@ CONF_SSL = _flag("CONFLUENCE_SSL_VERIFY")
 # --- 출력 캡 / 스코프 필터 ---
 MAX_RESULTS = int(os.environ.get("LEAN_MAX_RESULTS", "20"))
 BODY_CHARS = int(os.environ.get("LEAN_BODY_CHARS", "8000"))
+_MAX_LIST_LIMIT = 100  # limit 명시 시 최대 상한 (2단계 캡: 기본 20, 명시 시 100까지)
 CONF_SPACES = {s.strip() for s in os.environ.get("CONFLUENCE_SPACES_FILTER", "").split(",") if s.strip()}
 JIRA_PROJECTS = {s.strip() for s in os.environ.get("JIRA_PROJECTS_FILTER", "").split(",") if s.strip()}
 
@@ -224,13 +225,15 @@ def _check_issue_key(key: str) -> None:
             f"이슈키 형식이 아님: {key!r} (허용 패턴: {ISSUE_KEY_RE.pattern})")
 
 
-def _clamp_limit(limit: int, cap: int | None = None) -> int:
-    top = MAX_RESULTS if cap is None else cap
+def _clamp_limit(limit: int) -> int:
+    """목록 개수. 1~100이면 그대로, 그 외(음수·0·비정수)면 기본값(20)."""
     try:
         n = int(limit)
     except (TypeError, ValueError):
-        n = top
-    return max(1, min(n, top))
+        n = 0
+    if not 1 <= n <= _MAX_LIST_LIMIT:
+        n = MAX_RESULTS
+    return n
 
 
 def _clamp_chars(max_chars: int) -> int:
@@ -323,7 +326,7 @@ def _require_conf_space(id: str) -> dict | None:
 # ---------- Jira 도구 ----------
 
 @mcp.tool
-def jira_search(jql: str, limit: int = 20) -> list[dict]:
+def jira_search(jql: str, limit: Annotated[int, "목록 개수, 최대 100"] = 20) -> list[dict]:
     """JQL로 이슈를 검색하고 핵심 필드만 돌려준다."""
     jql = _and_jql_projects(jql)
     data = _jget("/rest/api/3/search", jql=jql,
@@ -383,7 +386,7 @@ def jira_get(key: str, max_chars: int = 8000) -> dict:
 
 
 @mcp.tool
-def jira_my_tasks(limit: int = 20) -> list[dict]:
+def jira_my_tasks(limit: Annotated[int, "목록 개수, 최대 100"] = 20) -> list[dict]:
     """나에게 배정된 미해결 이슈 목록."""
     return jira_search("assignee = currentUser() AND resolution = unresolved",
                        limit=_clamp_limit(limit))
@@ -404,7 +407,8 @@ def jira_projects() -> list[dict]:
 # ---------- Confluence 도구 ----------
 
 @mcp.tool
-def confluence_search(cql: str, limit: int = 20, include_snippet: bool = False) -> list[dict]:
+def confluence_search(cql: str, limit: Annotated[int, "목록 개수, 최대 100"] = 20,
+                      include_snippet: bool = False) -> list[dict]:
     """CQL로 페이지 검색. include_snippet=True면 본문 첫 200자 포함."""
     cql = _and_cql_spaces(cql)
     data = _cget("/rest/api/content/search", cql=cql,
@@ -427,7 +431,7 @@ def confluence_search(cql: str, limit: int = 20, include_snippet: bool = False) 
 
 
 @mcp.tool
-def confluence_get_children(id: str, limit: int = 50) -> list[dict]:
+def confluence_get_children(id: str, limit: Annotated[int, "목록 개수, 최대 100"] = 20) -> list[dict]:
     """페이지의 하위 페이지 목록(id, 제목)."""
     _check_content_id(id)
     denied = _require_conf_space(id)
@@ -448,7 +452,7 @@ def confluence_space_tree(space_key: str, max_depth: int = 5, limit: int = 100) 
                 "error": f"CONFLUENCE_SPACES_FILTER에 없는 스페이스 (허용: {sorted(CONF_SPACES)})"}
     max_depth = _clamp_depth(max_depth)
     data = _cget("/rest/api/content", spaceKey=space_key, type="page",
-                 expand="ancestors", limit=_clamp_limit(limit, cap=100))
+                 expand="ancestors", limit=_clamp_limit(limit))
     raw = [{"id": p.get("id"), "title": p.get("title"),
             "depth": len(p.get("ancestors") or []),
             "parent_id": (p.get("ancestors") or [{}])[-1].get("id") if p.get("ancestors") else None}
@@ -489,7 +493,8 @@ def confluence_get(id: str, max_chars: int = 8000) -> dict:
 
 
 @mcp.tool
-def confluence_get_comments(id: str, limit: int = 50, max_chars: int = 1500) -> list[dict]:
+def confluence_get_comments(id: str, limit: Annotated[int, "목록 개수, 최대 100"] = 20,
+                            max_chars: int = 1500) -> list[dict]:
     """페이지에 달린 댓글 목록. 본문은 max_chars로 절단."""
     _check_content_id(id)
     denied = _require_conf_space(id)

@@ -59,7 +59,7 @@ MCP에서 LLM은 **세션마다 모든 도구 정의 스키마를 다시 전송*
 ### 토큰 절약 설계 원칙
 1. **도구 10개** — 실제 쓰는 핵심만 (검색/조회/댓글/목록)
 2. **docstring 한 줄, 파라미터 설명 최소** — 스키마 평균 139B
-3. **결과 축약** — 목록은 `limit` 캡, 본문은 `max_chars`로 서버에서 잘라 줍니다
+3. **결과 축약** — 목록은 `limit` 캡 (기본 20, 최대 100), 본문은 `max_chars`로 서버에서 잘라 줍니다
 4. **Confluence HTML → plain text 변환** — 원본 HTML의 불필요한 토큰 소비를 막습니다
 5. **Jira REST `fields=` 명시** — 응답 자체를 작게 유지합니다
 
@@ -178,7 +178,7 @@ Personal Access Token** 메뉴에서 발급받습니다.
 |---|---|
 | `CONFLUENCE_SPACES_FILTER` | 허용 스페이스만 (콤마 구분, 예: `DEV,PM`) |
 | `JIRA_PROJECTS_FILTER` | 허용 프로젝트만 (콤마 구분, 예: `PROJ,TEST`) |
-| `LEAN_MAX_RESULTS` | 목록 기본 캡 (기본 20) |
+| `LEAN_MAX_RESULTS` | 목록 기본 캡 (기본 20, 명시 시 최대 100) |
 | `LEAN_BODY_CHARS` | 본문 기본 캡 (기본 8000) |
 
 **하위호환**: `ATLASSIAN_SITE_URL` / `ATLASSIAN_USER_EMAIL` / `ATLASSIAN_API_TOKEN`이

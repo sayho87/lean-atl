@@ -37,7 +37,7 @@ def unit() -> None:
     check("JIRA=PROJ,DEV", la_re2._filter_proj([{"key": "PROJ"}, {"key": "TEST"}]), [{"key": "PROJ"}])
     check("JQL AND", la_re2._and_jql_projects("text ~ foo ORDER BY created"),
           '(text ~ foo) AND project IN ("DEV", "PROJ") ORDER BY created')
-    check("한도 음수", la_re2._clamp_limit(-1), 1)
+    check("한도 음수", la_re2._clamp_limit(-1), la_re2.MAX_RESULTS)
     check("한도 과다", la_re2._clamp_limit(999999), la_re2.MAX_RESULTS)
     check("본문 과다", la_re2._clamp_chars(10_000_000), la_re2.BODY_CHARS)
 
