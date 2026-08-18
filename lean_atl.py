@@ -786,7 +786,8 @@ def confluence_search(cql: str, limit: Annotated[int, "목록 개수, 최대 100
                       under_page: str | None = None) -> list[dict]:
     """검색어 또는 CQL. 범위가 애매하면 사용자에게 어느 공간·문서인지 물어본 뒤
     space_key(공간 키 또는 이름)·under_page(문서 id 또는 제목, 그 하위 포함)로
-    좁혀 검색하세요. 내 문서=currentUser, 필터 밖 전체=all_spaces=True."""
+    좁혀 검색하세요. 주소·키를 모르면 confluence_spaces()로 목록을 보여주고
+    사용자가 고르게 하세요. 내 문서=currentUser, 필터 밖 전체=all_spaces=True."""
     if space_key:
         try:
             space_key = _resolve_space_ref(space_key)
@@ -926,7 +927,10 @@ def confluence_get_comments(id: str, limit: Annotated[int, "목록 개수, 최�
 
 @mcp.tool
 def confluence_spaces(limit: Annotated[int, "목록 개수, 최대 100"] = 20) -> list[dict]:
-    """스페이스 목록(key, 이름). 필터가 있으면 키별 직접 조회."""
+    """스페이스 목록(key, 이름). 필터(CONFLUENCE_SPACES_FILTER)에 들어간 공간만.
+
+    목록에서 고른 뒤 confluence_search의 space_key로 좁혀 검색하세요.
+    """
     if CONF_SPACES:
         # 목록 API(/rest/api/space)는 공간 디렉터리라서 검색으로 열리는 공간이
         # 빠질 수 있다. 필터 키는 단건 조회 → 실패 시 CQL로 확인한다.
