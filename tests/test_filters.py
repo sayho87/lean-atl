@@ -57,7 +57,7 @@ def unit() -> None:
     check("일반이슈 JQL", la_re2._jql_queries("로그인 오류")[0], 'text ~ "로그인 오류"')
     q_week = la_re2._search_queries("내 이름으로 주간보고 모아줘")
     check("주간보고 currentUser",
-          "contributor = currentUser()" in q_week[0] and "주간보고" in q_week[0], True)
+          "siteSearch" in q_week[0] and "currentUser" in q_week[0] and "주간보고" in q_week[0], True)
     check("필터 빈공간키 유지",
           la_re._filter_conf([{"title": "주간", "space": None}]),
           [{"title": "주간", "space": None}])

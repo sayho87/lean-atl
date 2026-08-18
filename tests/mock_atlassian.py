@@ -156,16 +156,7 @@ class H(BaseHTTPRequestHandler):
                 self._json({"error": f"project not found: {key}"}, 404)
         elif p == "/rest/api/search":
             cql = parse_qs(u.query).get("cql", [""])[0]
-            if "siteSearch" in cql:
-                self._json({"results": [{
-                    "content": {
-                        "id": "182209768", "type": "page",
-                        "title": "다운로드 쿠폰안",
-                        "space": {"key": "productplan", "name": "상품 계획"},
-                    },
-                    "excerpt": "쿠폰 받기 버튼 노출 조건",
-                }]})
-            elif "currentUser" in cql and "주간" in cql:
+            if "currentUser" in cql and "주간" in cql:
                 self._json({"results": [{
                     "content": {
                         "id": "70001", "type": "page",
@@ -176,6 +167,15 @@ class H(BaseHTTPRequestHandler):
                         "displayUrl": "/display/DEV/8월+3주+주간보고",
                     },
                     "excerpt": "금주 진행 사항",
+                }]})
+            elif "siteSearch" in cql:
+                self._json({"results": [{
+                    "content": {
+                        "id": "182209768", "type": "page",
+                        "title": "다운로드 쿠폰안",
+                        "space": {"key": "productplan", "name": "상품 계획"},
+                    },
+                    "excerpt": "쿠폰 받기 버튼 노출 조건",
                 }]})
             else:
                 self._json({"results": []})

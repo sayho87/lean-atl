@@ -438,9 +438,9 @@ def _search_queries(raw: str) -> list[str]:
     esc = kw.replace("\\", "\\\\").replace('"', '\\"')
     out: list[str] = []
     if mine:
+        out.append(f'siteSearch ~ "{esc}" AND contributor = currentUser()')
         out.append(f'title ~ "{esc}" AND contributor = currentUser() AND type = page')
         out.append(f'creator = currentUser() AND title ~ "{esc}" AND type = page')
-        out.append(f'contributor = currentUser() AND siteSearch ~ "{esc}"')
     out.append(f'siteSearch ~ "{esc}"')
     out.append(f'title ~ "{esc}" AND type = page')
     out.append(f'(title ~ "{esc}" OR text ~ "{esc}") AND type = page')
@@ -493,14 +493,15 @@ def _norm_search_hit(it: dict) -> dict | None:
 
 
 def _search_raw(cql: str, limit: int, expand: str | None) -> tuple[str, dict]:
-    """DC는 /rest/api/search 가 웹 UI와 같다. 비거나 없으면 content/search."""
+    """DC는 /rest/api/search + siteSearch 가 웹 검색 색인이다. 비면 content/search."""
     space_exp = "content.space,space"
     exp = f"{space_exp},{expand}" if expand else space_exp
     empty: tuple[str, dict] | None = None
     last_err = ""
     for name, path in (("search", "/rest/api/search"),
                        ("content/search", "/rest/api/content/search")):
-        code, data = _cget_status(path, cql=cql, limit=limit, expand=exp)
+        extra = {"excerpt": "highlight"} if path == "/rest/api/search" else {}
+        code, data = _cget_status(path, cql=cql, limit=limit, expand=exp, **extra)
         if code != 200:
             last_err += f"{name} HTTP {code}; "
             continue
