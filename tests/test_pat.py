@@ -51,6 +51,10 @@ async def integration() -> None:
         r = await c.call_tool("jira_search", {"jql": "project = TEST"})
         data = getattr(r, "data", r)
         check("jira_search v2 경로 동작", data[0]["key"], "TEST-1")
+        r = await c.call_tool("jira_get", {"key": "TEST-1", "max_chars": 200})
+        data = getattr(r, "data", r)
+        check("DC 위키 본문", "위키" in (data.get("description") or ""), True)
+        check("DC 위키 댓글", data.get("comments_recent")[0]["body"], "수정 진행 중입니다.")
         r = await c.call_tool("confluence_spaces", {})
         data = getattr(r, "data", r)
         check("conf PAT 스페이스 목록", len(data), 20)  # 기본 limit 캡 20

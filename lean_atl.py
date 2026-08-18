@@ -170,6 +170,25 @@ def _jget(path: str, **params: Any) -> dict:
     return _get_retry(jira_client(), path, params)
 
 
+def _jpost(path: str, payload: dict) -> dict:
+    """클라우드 검색(POST /search/jql)용. PAT면 쓰지 않는다."""
+    return _post_retry(jira_client(), path, payload)
+
+
+def _post_retry(client: httpx.Client, path: str, payload: dict) -> dict:
+    for attempt in range(2):
+        r = client.post(path, json=payload)
+        if r.status_code in (429, 500, 502, 503) and attempt == 0:
+            time.sleep(1)
+            continue
+        r.raise_for_status()
+        if not r.content:
+            return {}
+        data = r.json()
+        return data if isinstance(data, dict) else {"values": data}
+    raise RuntimeError(f"재시도 실패: POST {path}")
+
+
 def _cget(path: str, **params: Any) -> dict:
     return _get_retry(conf_client(), path, params)
 
@@ -242,6 +261,18 @@ def _adf_text(adf: dict | None, max_chars: int) -> str:
         _adf_to_text(c, buf)
     s = re.sub(r"\n{3,}", "\n\n", "".join(buf)).strip()
     return s[:max_chars] + "…" if len(s) > max_chars else s
+
+
+def _issue_text(body: Any, max_chars: int) -> str:
+    """클라우드=ADF(JSON), DC=위키/평문 문자열. 둘 다 텍스트로."""
+    if body is None:
+        return ""
+    if isinstance(body, str):
+        s = html.unescape(body).strip()
+        return s[:max_chars] + "…" if len(s) > max_chars else s
+    if isinstance(body, dict):
+        return _adf_text(body, max_chars)
+    return ""
 
 
 def _user(f: dict, key: str) -> str | None:
@@ -370,7 +401,8 @@ def _quote_cql_ident(s: str) -> str:
 
 
 _SELF_RE = re.compile(
-    r"내\s*이름|내가\s*(?:쓴|작성|올린|만든)|내\s*문서|내\s*가\s*(?:쓴|작성)|저자\s*나"
+    r"내\s*이름|내가\s*(?:쓴|작성|올린|만든)|내\s*문서|내\s*가\s*(?:쓴|작성)|"
+    r"저자\s*나|내\s*이슈|내\s*할\s*일|내\s*담당"
 )
 _WEEKLY_RE = re.compile(r"주간\s*보고|주간보고|주간업무|weekly\s*report", re.I)
 _NOISE_RE = re.compile(
@@ -383,7 +415,7 @@ def _plain_keyword(q: str) -> str:
     s = _SELF_RE.sub(" ", q)
     s = _WEEKLY_RE.sub("주간보고", s)
     s = _NOISE_RE.sub(" ", s)
-    s = re.sub(r"(?:으로|에서|에게|를|을|이|가|은|는|와|과|도|만|의)\s*", " ", s)
+    s = re.sub(r"(?:^|\s)(?:으로|에서|에게|를|을|이|가|은|는|와|과|도|만|의)(?=\s|$)", " ", s)
     s = re.sub(r"[\"'`]+", " ", s)
     s = re.sub(r"\s+", " ", s).strip(" .,?!")
     return s
@@ -503,6 +535,50 @@ def _and_jql_projects(jql: str) -> str:
     return _and_query(jql, clause)
 
 
+_JQL_MARK = re.compile(
+    r'(?:=|~|<>|>=|<=|\bAND\b|\bOR\b|\bNOT\b|\bIN\b|\bORDER\s+BY\b|\bcurrentUser\s*\()',
+    re.IGNORECASE,
+)
+
+
+def _jql_queries(raw: str) -> list[str]:
+    """일반 문장 → text ~ / 내 이슈=currentUser. JQL은 그대로."""
+    q = (raw or "").strip()
+    if not q:
+        return []
+    if _JQL_MARK.search(q):
+        return [q]
+    mine = bool(_SELF_RE.search(q))
+    kw = _plain_keyword(q)
+    esc = (kw or q).replace("\\", "\\\\").replace('"', '\\"')
+    if mine and not kw:
+        return ["assignee = currentUser() AND resolution = unresolved"]
+    if mine:
+        return [f'assignee = currentUser() AND text ~ "{esc}"']
+    return [f'text ~ "{esc}"']
+
+
+def _jira_search_raw(jql: str, limit: int, fields: str) -> dict:
+    """DC=GET /rest/api/2/search, 클라우드=POST /rest/api/3/search/jql."""
+    if JIRA_PAT:
+        return _jget("/rest/api/2/search", jql=jql, fields=fields, maxResults=limit)
+    return _jpost("/rest/api/3/search/jql", {
+        "jql": jql,
+        "maxResults": limit,
+        "fields": [f.strip() for f in fields.split(",") if f.strip()],
+    })
+
+
+def _lookup_project(key: str) -> dict:
+    try:
+        p = _jget(f"/rest/api/3/project/{key}")
+    except httpx.HTTPStatusError:
+        return {"key": key, "error": "프로젝트 조회 실패"}
+    if not isinstance(p, dict):
+        return {"key": key, "error": "프로젝트 조회 실패"}
+    return {"key": p.get("key") or key, "name": p.get("name")}
+
+
 def _and_cql_spaces(cql: str) -> str:
     """CONFLUENCE_SPACES_FILTER를 CQL에 강제 AND."""
     if not CONF_SPACES:
@@ -554,27 +630,34 @@ def _require_conf_space(id: str) -> dict | None:
 # "URL 환경변수 필요" 같은 혼선 오류가 발생하지 않는다.
 
 def jira_search(jql: str, limit: Annotated[int, "목록 개수, 최대 100"] = 20) -> list[dict]:
-    """JQL로 이슈를 검색하고 핵심 필드만 돌려준다."""
-    jql = _and_jql_projects(jql)
-    data = _jget("/rest/api/3/search", jql=jql,
-                 fields="summary,status,assignee,priority,labels,updated,project",
-                 maxResults=_clamp_limit(limit))
-    out = []
-    for it in data.get("issues", []):
-        f = it.get("fields", {})
-        proj = (f.get("project") or {}).get("key")
-        if JIRA_PROJECTS and proj not in JIRA_PROJECTS:
-            continue
-        out.append({
-            "key": it.get("key"),
-            "project": proj,
-            "summary": f.get("summary"),
-            "status": (f.get("status") or {}).get("name"),
-            "assignee": _user(f, "assignee"),
-            "priority": (f.get("priority") or {}).get("name"),
-            "labels": f.get("labels", []),
-            "updated": f.get("updated"),
-        })
+    """검색어 또는 JQL. 내 이슈=currentUser."""
+    last = ""
+    out: list[dict] = []
+    fields = "summary,status,assignee,priority,labels,updated,project"
+    for q in _jql_queries(jql):
+        last = _and_jql_projects(q)
+        data = _jira_search_raw(last, _clamp_limit(limit), fields)
+        batch = []
+        for it in data.get("issues") or []:
+            f = it.get("fields", {})
+            proj = (f.get("project") or {}).get("key")
+            if JIRA_PROJECTS and (proj or "").casefold() not in _JIRA_PROJECTS_CF:
+                continue
+            batch.append({
+                "key": it.get("key"),
+                "project": proj,
+                "summary": f.get("summary"),
+                "status": (f.get("status") or {}).get("name"),
+                "assignee": _user(f, "assignee"),
+                "priority": (f.get("priority") or {}).get("name"),
+                "labels": f.get("labels", []),
+                "updated": f.get("updated"),
+            })
+        out = batch
+        if out:
+            break
+    if not out:
+        return [{"error": "검색 0건", "jql": last}]
     return out
 
 
@@ -592,7 +675,7 @@ def jira_get(key: str, max_chars: int = 8000) -> dict:
     for c in (comments.get("comments") or [])[-3:]:
         last.append({"author": _user(c, "author"),
                      "created": c.get("created"),
-                     "body": _adf_text(c.get("body"), max_chars // 2)})
+                     "body": _issue_text(c.get("body"), max_chars // 2)})
     return {
         "key": data.get("key"),
         "url": f"{JIRA_URL}/browse/{data.get('key')}",
@@ -605,7 +688,7 @@ def jira_get(key: str, max_chars: int = 8000) -> dict:
         "labels": f.get("labels", []),
         "created": f.get("created"),
         "updated": f.get("updated"),
-        "description": _adf_text(f.get("description"), max_chars),
+        "description": _issue_text(f.get("description"), max_chars),
         "comments_total": comments.get("total", 0),
         "comments_recent": last,
     }
@@ -618,14 +701,32 @@ def jira_my_tasks(limit: Annotated[int, "목록 개수, 최대 100"] = 20) -> li
 
 
 def jira_projects() -> list[dict]:
-    """프로젝트 목록(key, 이름)."""
+    """프로젝트 목록(key, 이름). 필터가 있으면 키별 직접 조회."""
+    if JIRA_PROJECTS:
+        seen: set[str] = set()
+        out: list[dict] = []
+        for k in sorted(JIRA_PROJECTS):
+            item = _lookup_project(k)
+            ck = (item.get("key") or k).casefold()
+            if ck in seen:
+                continue
+            seen.add(ck)
+            out.append(item)
+        return out
     if JIRA_PAT:
-        # Server/DC v2: 배열 반환
         return _filter_proj([{"key": p.get("key"), "name": p.get("name")}
                              for p in _jget("/rest/api/2/project")])
-    data = _jget("/rest/api/3/project/search", maxResults=100)
-    return _filter_proj([{"key": p.get("key"), "name": p.get("name")}
-                         for p in data.get("values", [])])
+    allp: list[dict] = []
+    start = 0
+    for _ in range(20):
+        data = _jget("/rest/api/3/project/search", maxResults=50, startAt=start)
+        vals = data.get("values") or []
+        allp.extend(vals)
+        total = int(data.get("total") or 0)
+        start += len(vals)
+        if not vals or len(vals) < 50 or (total and start >= total):
+            break
+    return [{"key": p.get("key"), "name": p.get("name")} for p in allp]
 
 
 # ---------- Confluence 도구 ----------

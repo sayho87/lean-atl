@@ -126,6 +126,12 @@ class H(BaseHTTPRequestHandler):
             self._json({"issues": [ISSUE]})
         elif p == "/rest/api/3/issue/TEST-1":
             self._json(ISSUE)
+        elif p == "/rest/api/2/issue/TEST-1":
+            dc = json.loads(json.dumps(ISSUE))
+            dc["fields"]["description"] = "h3. 위키\n모바일에서 버튼이 겹침."
+            dc["fields"]["comment"]["comments"][0]["body"] = "수정 진행 중입니다."
+            dc["fields"]["comment"]["comments"][1]["body"] = "내일 배포 예정."
+            self._json(dc)
         elif p == "/rest/api/3/issue/FLAP-1":
             H.flap_count += 1
             if H.flap_count == 1:
@@ -141,6 +147,13 @@ class H(BaseHTTPRequestHandler):
             self._json(PROJECTS)
         elif p == "/rest/api/2/project":
             self._json(PROJECTS["values"])  # Server/DC v2는 배열 반환
+        elif p.startswith("/rest/api/3/project/") or p.startswith("/rest/api/2/project/"):
+            key = p.rsplit("/", 1)[-1]
+            found = next((x for x in PROJECTS["values"] if x["key"] == key), None)
+            if found:
+                self._json(found)
+            else:
+                self._json({"error": f"project not found: {key}"}, 404)
         elif p == "/rest/api/search":
             cql = parse_qs(u.query).get("cql", [""])[0]
             if "siteSearch" in cql:
@@ -249,7 +262,9 @@ class H(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         n = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(n) or b"{}") if n else {}
-        if u.path == "/rest/api/3/issue":
+        if u.path == "/rest/api/3/search/jql":
+            self._json({"issues": [ISSUE]})
+        elif u.path == "/rest/api/3/issue":
             self._json({"id": "999", "key": "TEST-99"}, 201)
         elif u.path == "/rest/api/3/issue/TEST-1/transitions":
             self._json({}, 204)

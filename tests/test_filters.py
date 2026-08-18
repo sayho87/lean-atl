@@ -49,6 +49,12 @@ def unit() -> None:
     check("일반문장→siteSearch", la_re2._search_queries("인당발행갯수")[0],
           'siteSearch ~ "인당발행갯수"')
     check("CQL 그대로", la_re2._search_queries('text ~ "foo"'), ['text ~ "foo"'])
+    check("이슈본문 문자열", la_re2._issue_text("h3. 위키\n본문", 8000), "h3. 위키\n본문")
+    check("이슈본문 없음", la_re2._issue_text(None, 8000), "")
+    check("내 이슈 JQL",
+          la_re2._jql_queries("내 이슈")[0],
+          "assignee = currentUser() AND resolution = unresolved")
+    check("일반이슈 JQL", la_re2._jql_queries("로그인 오류")[0], 'text ~ "로그인 오류"')
     q_week = la_re2._search_queries("내 이름으로 주간보고 모아줘")
     check("주간보고 currentUser",
           "contributor = currentUser()" in q_week[0] and "주간보고" in q_week[0], True)
