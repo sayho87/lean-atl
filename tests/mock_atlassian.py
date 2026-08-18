@@ -157,7 +157,10 @@ class H(BaseHTTPRequestHandler):
                     "content": {
                         "id": "70001", "type": "page",
                         "title": "8월 3주 주간보고",
-                        "space": {"key": "DEV"},
+                    },
+                    "resultGlobalContainer": {
+                        "title": "개발팀 스페이스",
+                        "displayUrl": "/display/DEV/8월+3주+주간보고",
                     },
                     "excerpt": "금주 진행 사항",
                 }]})

@@ -250,10 +250,19 @@ def _user(f: dict, key: str) -> str | None:
 
 
 def _filter_conf(results: list[dict]) -> list[dict]:
-    """CONFLUENCE_SPACES_FILTER 적용 (key 또는 space 기준, 대소문자 무시). 필터 미설정이면 그대로."""
+    """CONFLUENCE_SPACES_FILTER 적용 (key 또는 space 기준, 대소문자 무시).
+
+    공간 키가 비어 있으면 버리지 않는다. /rest/api/search 는 space 필드가
+    자주 비고, 그 경우 서버 CQL 공간 절이 이미 범위를 제한한다.
+    """
     if not CONF_SPACES:
         return results
-    return [r for r in results if (r.get("key") or r.get("space") or "").casefold() in _CONF_SPACES_CF]
+    out: list[dict] = []
+    for r in results:
+        key = r.get("key") or r.get("space") or ""
+        if not key or str(key).casefold() in _CONF_SPACES_CF:
+            out.append(r)
+    return out
 
 
 def _lookup_space(key: str) -> dict:
@@ -413,8 +422,26 @@ def _search_queries(raw: str) -> list[str]:
     return uniq
 
 
+def _space_key_from_hit(it: dict, content: dict) -> str | None:
+    """검색 응답에서 공간 키를 꺼낸다. /rest/api/search 는 content.space 가 자주 비어 있다."""
+    space = content.get("space") if "space" in content else it.get("space")
+    if isinstance(space, dict) and space.get("key"):
+        return str(space["key"])
+    if isinstance(space, str) and space:
+        return space
+    container = it.get("resultGlobalContainer") or {}
+    url = container.get("displayUrl") or it.get("url") or ""
+    m = re.search(r"/(?:spaces|display)/([^/?#]+)", str(url))
+    if m:
+        return m.group(1)
+    exp = (content.get("_expandable") or it.get("_expandable") or {}).get("space") or ""
+    if "/rest/api/space/" in str(exp):
+        return str(exp).rstrip("/").rsplit("/", 1)[-1]
+    return None
+
+
 def _norm_search_hit(it: dict) -> dict | None:
-    """ /rest/api/search 는 content 아래에 id/title/space 가 있다."""
+    """ /rest/api/search 는 content 아래 + resultGlobalContainer 에 공간이 있다."""
     content = it.get("content") if isinstance(it.get("content"), dict) else it
     if not isinstance(content, dict):
         return None
@@ -424,11 +451,7 @@ def _norm_search_hit(it: dict) -> dict | None:
     typ = content.get("type") or it.get("entityType") or "page"
     if typ not in ("page", "blogpost", "content"):
         return None
-    space = content.get("space") if "space" in content else it.get("space")
-    if isinstance(space, dict):
-        sp = space.get("key")
-    else:
-        sp = space
+    sp = _space_key_from_hit(it, content)
     return {
         "id": str(cid),
         "title": content.get("title") or it.get("title"),
@@ -439,11 +462,13 @@ def _norm_search_hit(it: dict) -> dict | None:
 
 def _search_raw(cql: str, limit: int, expand: str | None) -> tuple[str, dict]:
     """DC는 /rest/api/search 가 웹 UI와 같다. 비거나 없으면 content/search."""
+    space_exp = "content.space,space"
+    exp = f"{space_exp},{expand}" if expand else space_exp
     empty: tuple[str, dict] | None = None
     last_err = ""
     for name, path in (("search", "/rest/api/search"),
                        ("content/search", "/rest/api/content/search")):
-        code, data = _cget_status(path, cql=cql, limit=limit, expand=expand)
+        code, data = _cget_status(path, cql=cql, limit=limit, expand=exp)
         if code != 200:
             last_err += f"{name} HTTP {code}; "
             continue

@@ -52,6 +52,20 @@ def unit() -> None:
     q_week = la_re2._search_queries("내 이름으로 주간보고 모아줘")
     check("주간보고 currentUser",
           "contributor = currentUser()" in q_week[0] and "주간보고" in q_week[0], True)
+    check("필터 빈공간키 유지",
+          la_re._filter_conf([{"title": "주간", "space": None}]),
+          [{"title": "주간", "space": None}])
+    check("displayUrl 공간키",
+          la_re._space_key_from_hit(
+              {"resultGlobalContainer": {"displayUrl": "/display/ENMeProduct/x"}},
+              {"id": "1", "type": "page", "title": "t"}),
+          "ENMeProduct")
+    check("spaces경로 공간키",
+          la_re._norm_search_hit({
+              "content": {"id": "9", "type": "page", "title": "주간보고"},
+              "resultGlobalContainer": {"displayUrl": "/spaces/productplan/pages/9"},
+          })["space"],
+          "productplan")
 
 
 async def integration() -> None:
