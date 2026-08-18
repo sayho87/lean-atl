@@ -38,7 +38,7 @@ flowchart TD
 
     SK --> FILT
     SP --> FILT
-    FILT["<b>공간 필터 적용</b><br/>space = (ENMeProduct OR<br/>PromotionCell OR productplan)"]
+    FILT["<b>공간 필터 적용</b><br/>space = (CONFLUENCE_SPACES_FILTER에<br/>지정한 공간들)"]
 
     FILT --> RAW{"<b>1차 시도</b><br/>/rest/api/search<br/>웹과 같은 검색 색인 (siteSearch)"}
 
