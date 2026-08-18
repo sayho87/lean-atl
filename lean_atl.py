@@ -502,6 +502,10 @@ def _search_raw(cql: str, limit: int, expand: str | None) -> tuple[str, dict]:
                        ("content/search", "/rest/api/content/search")):
         extra = {"excerpt": "highlight"} if path == "/rest/api/search" else {}
         code, data = _cget_status(path, cql=cql, limit=limit, expand=exp, **extra)
+        if code != 200 and extra:
+            # 일부 DC는 excerpt 파라미터를 모른다 → 빼고 재시도
+            last_err += f"{name}(excerpt) HTTP {code}; "
+            code, data = _cget_status(path, cql=cql, limit=limit, expand=exp)
         if code != 200:
             last_err += f"{name} HTTP {code}; "
             continue

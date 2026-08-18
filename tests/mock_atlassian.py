@@ -155,7 +155,12 @@ class H(BaseHTTPRequestHandler):
             else:
                 self._json({"error": f"project not found: {key}"}, 404)
         elif p == "/rest/api/search":
-            cql = parse_qs(u.query).get("cql", [""])[0]
+            qs = parse_qs(u.query)
+            if "excerpt" in qs:
+                # 시뮬레이션: 일부 DC는 excerpt 파라미터를 모름 → 400
+                self._json({"error": "unknown parameter: excerpt"}, 400)
+                return
+            cql = qs.get("cql", [""])[0]
             if "currentUser" in cql and "주간" in cql:
                 self._json({"results": [{
                     "content": {

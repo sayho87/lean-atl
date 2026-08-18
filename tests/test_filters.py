@@ -177,9 +177,15 @@ async def integration_pagination() -> None:
             r = await c5.call_tool("confluence_search",
                                    {"cql": "내 이름으로 주간보고 모아줘"})
             data = getattr(r, "data", r)
-            check("내 주간보고",
+            check("내 주간보고", 
                   (data[0].get("id"), data[0].get("title")),
                   ("70001", "8월 3주 주간보고"))
+            # DC가 excerpt 파라미터를 거부해도 재시도로 검색 성공해야 한다
+            r = await c5.call_tool("confluence_search", {"cql": "다운로드 쿠폰"})
+            data = getattr(r, "data", r)
+            check("excerpt 거부 후 재시도",
+                  (data[0].get("id"), data[0].get("space")),
+                  ("182209768", "productplan"))
 
 
 async def main() -> None:
