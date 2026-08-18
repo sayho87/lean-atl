@@ -183,7 +183,7 @@ Personal Access Token** 메뉴에서 발급받습니다.
 | `JIRA_PROJECTS_FILTER` | 허용 프로젝트만 (콤마 구분, 예: `PROJ,TEST`) |
 | `CONFLUENCE_HTTP_PROXY` / `CONFLUENCE_HTTPS_PROXY` | 회사망 프록시 경유 (Jira는 `JIRA_HTTP_PROXY`/`JIRA_HTTPS_PROXY`). 미설정 시 `HTTP_PROXY`/`HTTPS_PROXY` 사용 |
 | `LEAN_MAX_RESULTS` | 목록 기본 캡 (기본 20, 명시 시 최대 100) |
-| `LEAN_BODY_CHARS` | 본문 기본 캡 (기본 8000) |
+| `LEAN_BODY_CHARS` | 본문 기본 캡 (기본 3000) |
 
 **하위호환**: `ATLASSIAN_SITE_URL` / `ATLASSIAN_USER_EMAIL` / `ATLASSIAN_API_TOKEN`이
 있으면 Jira·Confluence 공용으로 사용합니다 (`JIRA_*`/`CONFLUENCE_*`가 우선).
@@ -258,7 +258,7 @@ Jira 도구(`jira_search`, `jira_get`, `jira_my_tasks`, `jira_projects`)는
 | `jira_get` | 이슈 상세 (설명/댓글 앞부분만) |
 | `jira_my_tasks` | 내 미해결 이슈 |
 | `jira_projects` | 프로젝트 목록 |
-| `confluence_search` | CQL 검색 (`include_snippet` 옵션으로 본문 200자 미리보기) |
+| `confluence_search` | CQL 검색 (본문 200자 발췌 기본 포함) |
 | `confluence_get` | 페이지 본문 (text, max_chars로 앞부분만) |
 | `confluence_get_children` | 하위 페이지 목록 |
 | `confluence_get_comments` | 페이지 댓글 목록 (본문 앞부분만) |
@@ -268,7 +268,7 @@ Jira 도구(`jira_search`, `jira_get`, `jira_my_tasks`, `jira_projects`)는
 ### 문서 탐색 순서 예시
 1. `confluence_spaces` → 어떤 스페이스가 있는지
 2. `confluence_space_tree(space_key, max_depth=5)` → 스페이스 구조 파악
-3. `confluence_search(cql, include_snippet=True)` → 원하는 문서 검색 (스니펫으로 판별)
+3. `confluence_search(cql)` → 원하는 문서 검색 (발췌로 판별, 이미 읽은 문서는 재조회 안 함)
 4. `confluence_get(id)` → 문서 본문 읽기
 5. `confluence_get_children(id)` → 하위 문서로 이어서 읽기
 

@@ -184,7 +184,7 @@ can be reused as-is.
 | `JIRA_PROJECTS_FILTER` | Allowed projects only (comma-separated, e.g. `PROJ,TEST`) |
 | `CONFLUENCE_HTTP_PROXY` / `CONFLUENCE_HTTPS_PROXY` | Corporate proxy (Jira: `JIRA_HTTP_PROXY`/`JIRA_HTTPS_PROXY`). Falls back to `HTTP_PROXY`/`HTTPS_PROXY` |
 | `LEAN_MAX_RESULTS` | Default list cap (default 20, up to 100 when specified) |
-| `LEAN_BODY_CHARS` | Default body cap (default 8000) |
+| `LEAN_BODY_CHARS` | Default body cap (default 3000) |
 
 **Backward compatibility**: if `ATLASSIAN_SITE_URL` / `ATLASSIAN_USER_EMAIL` /
 `ATLASSIAN_API_TOKEN` are set, they are shared by Jira and Confluence
@@ -261,7 +261,7 @@ tool that has no endpoint configured.
 | `jira_get` | Issue details (description/comments, first N chars) |
 | `jira_my_tasks` | My unresolved issues |
 | `jira_projects` | Project list |
-| `confluence_search` | CQL search (`include_snippet` previews first 200 chars) |
+| `confluence_search` | CQL search (200-char body excerpt included by default) |
 | `confluence_get` | Page body (text, first N chars via `max_chars`) |
 | `confluence_get_children` | Child page list |
 | `confluence_get_comments` | Page comments (first N chars) |
@@ -271,7 +271,7 @@ tool that has no endpoint configured.
 ### Example exploration flow
 1. `confluence_spaces` → see which spaces exist
 2. `confluence_space_tree(space_key, max_depth=5)` → understand the structure
-3. `confluence_search(cql, include_snippet=True)` → find documents (judge by snippet)
+3. `confluence_search(cql)` → find documents (judge by excerpt; already-read docs aren't re-fetched)
 4. `confluence_get(id)` → read the page body
 5. `confluence_get_children(id)` → continue into child pages
 
