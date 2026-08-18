@@ -370,8 +370,10 @@ def _require_conf_space(id: str) -> dict | None:
 
 
 # ---------- Jira 도구 ----------
+# Jira 도구는 JIRA_URL 미설정 시 등록하지 않는다 (모듈 끝의 조건부 등록 참고).
+# 등록하지 않으면 LLM 도구 목록에 아예 나타나지 않아
+# "URL 환경변수 필요" 같은 혼선 오류가 발생하지 않는다.
 
-@mcp.tool
 def jira_search(jql: str, limit: Annotated[int, "목록 개수, 최대 100"] = 20) -> list[dict]:
     """JQL로 이슈를 검색하고 핵심 필드만 돌려준다."""
     jql = _and_jql_projects(jql)
@@ -397,7 +399,6 @@ def jira_search(jql: str, limit: Annotated[int, "목록 개수, 최대 100"] = 2
     return out
 
 
-@mcp.tool
 def jira_get(key: str, max_chars: int = 8000) -> dict:
     """이슈 상세. 설명·코멘트 본문은 max_chars로 절단."""
     _check_issue_key(key)
@@ -431,14 +432,12 @@ def jira_get(key: str, max_chars: int = 8000) -> dict:
     }
 
 
-@mcp.tool
 def jira_my_tasks(limit: Annotated[int, "목록 개수, 최대 100"] = 20) -> list[dict]:
     """나에게 배정된 미해결 이슈 목록."""
     return jira_search("assignee = currentUser() AND resolution = unresolved",
                        limit=_clamp_limit(limit))
 
 
-@mcp.tool
 def jira_projects() -> list[dict]:
     """프로젝트 목록(key, 이름)."""
     if JIRA_PAT:
@@ -582,9 +581,21 @@ def confluence_spaces(limit: Annotated[int, "목록 개수, 최대 100"] = 20) -
             for s in data.get("results", [])]
 
 
+# ---------- 조건부 등록 ----------
+# JIRA_URL 미설정 환경(Confluence 전용)에서는 Jira 도구 4개를 아예 등록하지 않아
+# LLM 도구 목록에서 제외한다. fastmcp add_tool은 docstring에서 설명을 추출하므로
+# @mcp.tool 데코레이터와 동일한 스키마가 생성된다.
+_JIRA_TOOLS = (jira_search, jira_get, jira_my_tasks, jira_projects)
+if JIRA_URL:
+    for _fn in _JIRA_TOOLS:
+        mcp.add_tool(_fn)
+
+
 if __name__ == "__main__":
     # 시작 로그 — stdout은 MCP 프로토콜 채널이므로 반드시 stderr로 출력
-    print("lean-atl: 읽기 전용 서버 (쓰기 도구 0개, 도구 10개)", file=sys.stderr)
+    _n_jira = 4 if JIRA_URL else 0
+    _suffix = "" if _n_jira else " — Jira URL 미설정(도구 4개 제외, Confluence 전용)"
+    print(f"lean-atl: 읽기 전용 서버 (쓰기 도구 0개, 도구 {6 + _n_jira}개{_suffix})", file=sys.stderr)
     for name, u in (("Jira", JIRA_URL), ("Confluence", CONF_URL)):
         if u.startswith("http://"):
             print(f"lean-atl 경고: {name} URL이 HTTPS가 아닙니다 — "

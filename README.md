@@ -4,7 +4,7 @@
 
 # lean-atl
 
-<p align="center"><strong>10 tools. 1.7KB. 97% fewer tokens.</strong></p>
+<p align="center"><strong>Up to 10 tools. 1.8KB. Up to 98% fewer tokens.</strong></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license">
@@ -13,7 +13,9 @@
 
 A lightweight **read-only** local Jira/Confluence MCP server.
 Supports both Cloud and Server/Data Center deployments.
-10 tools with a 1.7KB tool-definition schema — only ~423 tokens per session.
+Up to 10 tools with a 1.8KB tool-definition schema — only ~448 tokens per session.
+If you use Confluence only (no JIRA_URL), 4 Jira tools are omitted automatically:
+6 tools / 1.2KB / ~304 tokens — 98% fewer than a full MCP server.
 
 **Contents:** [Why lean-atl](#why-lean-atl) · [Why it is light](#why-it-is-light) · [Installation](#installation) · [Environment variables](#environment-variables) · [Tools](#tools-10) · [Security design](#security-design) · [Testing](#testing-without-real-api-keys)
 
@@ -34,7 +36,7 @@ flowchart TD
     B -->|"Tool definitions are sent regardless of usage"| D["Even when only one tool is used"]
     C --> E["lean-atl's choice"]
     D --> E
-    E --> F["Only 10 core tools — 1,694B ≈ 423 tokens"]
+    E --> F["Up to 10 core tools — 1.8KB ≈ 448 tokens"]
     E --> G["Compact schema — one-line docstring, ~169B/tool"]
     E --> H["Output trimming — limit caps, first N chars, HTML → text"]
 ```
@@ -80,7 +82,7 @@ lean-atl takes a different path: instead of compressing an existing server, it
 | Tool descriptions | High compression can make tools hard for the LLM to understand | Full descriptions kept for 10 tools |
 
 A compression proxy can push a server with many tools (94) down to ~500 tokens
-at its most aggressive level, while lean-atl uses 423 tokens for 10 tools and
+at its most aggressive level, while lean-atl uses 448 tokens for 10 tools and
 keeps each tool's description intact.
 
 ## Installation
@@ -245,7 +247,12 @@ when `*_PERSONAL_TOKEN` is set, otherwise Basic (Cloud API token).
 > On Windows, change `command` to `.venv\Scripts\python.exe`
 > (e.g. `C:\Users\you\Projects\lean-atl\.venv\Scripts\python.exe`).
 
-## Tools (10)
+## Tools (up to 10)
+
+Jira tools (`jira_search`, `jira_get`, `jira_my_tasks`, `jira_projects`) are
+registered only when `JIRA_URL` is set. In a Confluence-only environment the
+server exposes 6 tools, so the model never sees — or tries to call — a Jira
+tool that has no endpoint configured.
 
 | Tool | Description |
 |---|---|

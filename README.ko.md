@@ -4,7 +4,7 @@
 
 # lean-atl
 
-<p align="center"><strong>10 tools. 1.7KB. 97% fewer tokens.</strong></p>
+<p align="center"><strong>최대 10개 도구. 1.8KB. 최대 98% 토큰 절감.</strong></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license">
@@ -13,7 +13,9 @@
 
 가벼운 **읽기전용** 로컬 Jira/Confluence MCP 서버입니다.
 클라우드와 서버/데이터센터(Data Center) 배포를 모두 지원합니다.
-도구 10개, 도구 정의 스키마 1.7KB — 세션당 약 423토큰만 전송합니다.
+도구 10개, 도구 정의 스키마 1.8KB — 세션당 약 448토큰만 전송합니다.
+Jira를 사용하지 않는 환경(URL 미설정)에서는 Jira 도구 4개가 자동 제외되어
+도구 6개 / 1.2KB / 약 304토큰 — 도구가 많은 MCP 대비 최대 98% 절감입니다.
 
 **목차:** [왜 lean-atl인가](#왜-lean-atl인가) · [왜 가벼운가](#왜-가벼운가) · [설치 및 실행](#설치-및-실행) · [환경변수](#환경변수) · [도구 목록](#도구-목록-10개) · [보안 설계](#보안-설계) · [테스트](#테스트-실-api-키-없이)
 
@@ -34,7 +36,7 @@ flowchart TD
     B -->|"도구 정의는 사용 여부와 무관하게 전송됩니다"| D["실제 사용 도구는 하나뿐인데도"]
     C --> E["lean-atl의 선택"]
     D --> E
-    E --> F["핵심 도구 10개만 — 1,694B ≈ 423토큰"]
+    E --> F["핵심 도구 최대 10개 — 1.8KB ≈ 448토큰"]
     E --> G["스키마 압축 — docstring 한 줄, 평균 169B/도구"]
     E --> H["출력 축약 — limit 캡, 본문 앞부분만, HTML → text"]
 ```
@@ -78,7 +80,7 @@ MCP에서 LLM은 **세션마다 모든 도구 정의 스키마를 다시 전송*
 | 도구 설명 | 압축 레벨이 높으면 LLM이 도구를 이해하기 어려울 수 있음 | 10개 도구에 충분한 설명 유지 |
 
 압축 프록시가 도구가 많은 서버(94개)를 가장 강하게 압축하면 약 500토큰까지
-줄어들지만, lean-atl은 10개 도구로 423토큰이면서 각 도구의 설명을 유지한다.
+줄어들지만, lean-atl은 10개 도구로 448토큰이면서 각 도구의 설명을 유지한다.
 
 ## 설치 및 실행
 
@@ -243,7 +245,11 @@ Personal Access Token** 메뉴에서 발급받습니다.
 > Windows라면 `command` 경로를 `.venv\Scripts\python.exe`로 바꿉니다
 > (예: `C:\Users\you\Projects\lean-atl\.venv\Scripts\python.exe`).
 
-## 도구 목록 (10개)
+## 도구 목록 (최대 10개)
+
+Jira 도구(`jira_search`, `jira_get`, `jira_my_tasks`, `jira_projects`)는
+`JIRA_URL`이 설정된 경우에만 등록됩니다. Confluence 전용 환경에서는 6개만
+노출되어, 모델이 설정되지 않은 Jira 도구를 아예 볼 수 없고 호출하지도 않습니다.
 
 | 도구 | 설명 |
 |---|---|
