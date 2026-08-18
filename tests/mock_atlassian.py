@@ -51,6 +51,28 @@ SPACES = {"results": [
     {"key": "PM", "name": "기획팀 스페이스", "type": "global"},
 ]}
 
+# 페이지네이션 검증용: 스페이스 120개 — 필터 대상 키(PromotionCell·ENMeProduct·productplan)는
+# 정렬 순서상 뒤쪽(100번 이후)에 배치해 "첫 페이지에 안 잡히는" 실서버 상황을 재현한다.
+_MANY_SPACES = (
+    [{"key": "DEV", "name": "개발팀 스페이스", "type": "global"},
+     {"key": "PM", "name": "기획팀 스페이스", "type": "global"}]
+    + [{"key": f"SPACE_{i:03d}", "name": f"스페이스 {i:03d}", "type": "global"} for i in range(1, 112)]
+    + [
+        {"key": "PromotionCell", "name": "프로모션 셀", "type": "global"},
+        {"key": "ENMeProduct", "name": "ENMe 상품", "type": "global"},
+        {"key": "productplan", "name": "상품 계획", "type": "global"},
+        {"key": "SPACE_112", "name": "스페이스 112", "type": "global"},
+        {"key": "SPACE_113", "name": "스페이스 113", "type": "global"},
+        {"key": "SPACE_114", "name": "스페이스 114", "type": "global"},
+        {"key": "SPACE_115", "name": "스페이스 115", "type": "global"},
+        {"key": "SPACE_116", "name": "스페이스 116", "type": "global"},
+        {"key": "SPACE_117", "name": "스페이스 117", "type": "global"},
+        {"key": "SPACE_118", "name": "스페이스 118", "type": "global"},
+        {"key": "SPACE_119", "name": "스페이스 119", "type": "global"},
+        {"key": "SPACE_120", "name": "스페이스 120", "type": "global"},
+    ]
+)
+
 PAGE = {
     "id": "12345", "title": "릴리스 노트 3.2",
     "space": {"key": "DEV"},
@@ -141,7 +163,25 @@ class H(BaseHTTPRequestHandler):
         elif p.startswith("/rest/api/content/12345"):
             self._json(PAGE)
         elif p == "/rest/api/space":
-            self._json(SPACES)
+            # 실제 Confluence 페이지네이션 응답 형식: results/start/limit/size/_links.next
+            q = parse_qs(u.query)
+            start = int(q.get("start", ["0"])[0])
+            limit = int(q.get("limit", ["25"])[0])
+            source = _MANY_SPACES
+            page = source[start:start + limit]
+            resp = {
+                "results": page,
+                "start": start,
+                "limit": limit,
+                "size": len(page),
+                "_links": {
+                    "base": "http://127.0.0.1:8765",
+                    "self": f"/rest/api/space?limit={limit}&start={start}",
+                },
+            }
+            if start + len(page) < len(source):
+                resp["_links"]["next"] = f"/rest/api/space?limit={limit}&start={start + len(page)}"
+            self._json(resp)
         else:
             self._json({"error": f"not mocked: {p}"}, 404)
 

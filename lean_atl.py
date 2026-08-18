@@ -239,6 +239,24 @@ def _filter_conf(results: list[dict]) -> list[dict]:
     return [r for r in results if (r.get("key") or r.get("space") or "").casefold() in _CONF_SPACES_CF]
 
 
+_MAX_SPACE_PAGES = 50  # 페이지네이션 안전 상한 (50페이지 × 100개 = 5,000개 스페이스면 충분)
+
+
+def _cget_spaces_page(start: int, page_limit: int = 100) -> tuple[list[dict], int | None]:
+    """스페이스 목록 한 페이지 조회 → (results, next_start). next_start None이면 끝.
+
+    _links.next 상대경로(예: /rest/api/space?limit=100&start=100)에서 start 추출,
+    없으면 이번 배치 크기로 계산. start가 None일 때만 종료 (무한 루프 방지).
+    """
+    data = _cget("/rest/api/space", limit=page_limit, start=start)
+    results = data.get("results") or []
+    next_link = (data.get("_links") or {}).get("next")
+    if not next_link:
+        return results, None
+    m = re.search(r"[?&]start=(\d+)", str(next_link))
+    return results, (int(m.group(1)) if m else start + len(results))
+
+
 def _filter_proj(results: list[dict]) -> list[dict]:
     """JIRA_PROJECTS_FILTER 적용 (key 기준, 대소문자 무시). 필터 미설정이면 그대로."""
     if not JIRA_PROJECTS:
@@ -546,11 +564,22 @@ def confluence_get_comments(id: str, limit: Annotated[int, "목록 개수, 최�
 
 
 @mcp.tool
-def confluence_spaces() -> list[dict]:
+def confluence_spaces(limit: Annotated[int, "목록 개수, 최대 100"] = 20) -> list[dict]:
     """스페이스 목록(key, 이름). CONFLUENCE_SPACES_FILTER 적용."""
-    data = _cget("/rest/api/space", limit=50)
-    return _filter_conf([{"key": s.get("key"), "name": s.get("name"), "type": s.get("type")}
-                         for s in data.get("results", [])])
+    if CONF_SPACES:
+        # 필터 설정 시: 전체 스페이스 페이지네이션 조회 후 필터 매칭 —
+        # 스페이스가 많아 첫 페이지에 없어도 뒤쪽에서 정확히 찾는다.
+        all_spaces: list[dict] = []
+        start: int | None = 0
+        for _ in range(_MAX_SPACE_PAGES):
+            batch, start = _cget_spaces_page(start)
+            all_spaces.extend(batch)
+            if start is None:
+                break
+        return _filter_conf(all_spaces)
+    data = _cget("/rest/api/space", limit=_clamp_limit(limit))
+    return [{"key": s.get("key"), "name": s.get("name"), "type": s.get("type")}
+            for s in data.get("results", [])]
 
 
 if __name__ == "__main__":

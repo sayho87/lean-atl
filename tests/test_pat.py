@@ -53,7 +53,7 @@ async def integration() -> None:
         check("jira_search v2 경로 동작", data[0]["key"], "TEST-1")
         r = await c.call_tool("confluence_spaces", {})
         data = getattr(r, "data", r)
-        check("conf PAT 스페이스 목록", len(data), 2)
+        check("conf PAT 스페이스 목록", len(data), 20)  # 기본 limit 캡 20
 
 
 async def main() -> None:

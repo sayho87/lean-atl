@@ -78,9 +78,46 @@ async def integration() -> None:
               getattr(r, "data", r).get("id"), "12345")
 
 
+async def integration_pagination() -> None:
+    """실서버 재현: 스페이스 120개, 필터 키가 뒤쪽(100번 이후)에 존재 → 페이지네이션으로 전체 조회 후 매칭."""
+    os.environ["ATLASSIAN_SITE_URL"] = "http://127.0.0.1:8765"
+    os.environ["ATLASSIAN_USER_EMAIL"] = "test@test.com"
+    os.environ["ATLASSIAN_API_TOKEN"] = "fake"
+    os.environ["CONFLUENCE_SPACES_FILTER"] = "PromotionCell,ENMeProduct,productplan"
+    os.environ["JIRA_PROJECTS_FILTER"] = ""
+    m = importlib.reload(la).mcp
+    async with Client(m) as c:
+        r = await c.call_tool("confluence_spaces", {})
+        data = getattr(r, "data", r)
+        got_keys = sorted(x["key"] for x in data)
+        check("120개+뒤쪽 필터 3개 매칭",
+              got_keys, ["ENMeProduct", "PromotionCell", "productplan"])
+        # 대소문자가 달라도 매칭 (casefold)
+        os.environ["CONFLUENCE_SPACES_FILTER"] = "promotioncell,enmeproduct,PROMOTIONCELL"
+        m2 = importlib.reload(la).mcp
+        async with Client(m2) as c2:
+            r = await c2.call_tool("confluence_spaces", {})
+            data = getattr(r, "data", r)
+            got_keys2 = sorted(x["key"] for x in data)
+            check("대소문자 혼합 필터 매칭",
+                  got_keys2, ["ENMeProduct", "PromotionCell"])
+        # 필터 미설정 → limit 캡 유지 (기본 20)
+        os.environ["CONFLUENCE_SPACES_FILTER"] = ""
+        m3 = importlib.reload(la).mcp
+        async with Client(m3) as c3:
+            r = await c3.call_tool("confluence_spaces", {})
+            data = getattr(r, "data", r)
+            check("필터없음 기본 20개", len(data), 20)
+            check("필터없음 첫 키", data[0]["key"], "DEV")
+            r = await c3.call_tool("confluence_spaces", {"limit": 100})
+            data = getattr(r, "data", r)
+            check("필터없음 limit 100", len(data), 100)
+
+
 async def main() -> None:
     unit()
     await integration()
+    await integration_pagination()
     print(f"\n{'전부 통과' if not fails else f'실패: {fails}'}")
 
 
