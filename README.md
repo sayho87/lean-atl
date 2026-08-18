@@ -4,7 +4,7 @@
 
 # lean-atl
 
-<p align="center"><strong>Up to 10 tools. 1.8KB. Up to 98% fewer tokens.</strong></p>
+<p align="center"><strong>Up to 10 tools. 1.8KB tool schema. Up to 98% fewer tool-definition tokens.</strong></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license">
@@ -13,9 +13,10 @@
 
 A lightweight **read-only** local Jira/Confluence MCP server.
 Supports both Cloud and Server/Data Center deployments.
-Up to 10 tools with a 1.8KB tool-definition schema — only ~448 tokens per session.
+Up to 10 tools with a 1.8KB tool-definition schema — only ~448 tokens of tool definitions per request.
 If you use Confluence only (no JIRA_URL), 4 Jira tools are omitted automatically:
-6 tools / 1.2KB / ~304 tokens — 98% fewer than a full MCP server.
+6 tools / 1.2KB / ~304 tokens of tool definitions — 98% fewer than a full MCP server.
+Tool definitions are sent once per request; session bills are also driven by content read, output, and prompt caching.
 
 **Contents:** [Why lean-atl](#why-lean-atl) · [Why it is light](#why-it-is-light) · [Installation](#installation) · [Environment variables](#environment-variables) · [Tools](#tools-10) · [Security design](#security-design) · [Testing](#testing-without-real-api-keys)
 
