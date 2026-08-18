@@ -49,6 +49,9 @@ def unit() -> None:
     check("일반문장→siteSearch", la_re2._search_queries("인당발행갯수")[0],
           'siteSearch ~ "인당발행갯수"')
     check("CQL 그대로", la_re2._search_queries('text ~ "foo"'), ['text ~ "foo"'])
+    q_week = la_re2._search_queries("내 이름으로 주간보고 모아줘")
+    check("주간보고 currentUser",
+          "contributor = currentUser()" in q_week[0] and "주간보고" in q_week[0], True)
 
 
 async def integration() -> None:
@@ -151,6 +154,12 @@ async def integration_pagination() -> None:
                                    {"cql": 'text ~ "없는고유어xyz123"'})
             data = getattr(r, "data", r)
             check("CQL 0건 진단", data[0].get("error"), "검색 0건")
+            r = await c5.call_tool("confluence_search",
+                                   {"cql": "내 이름으로 주간보고 모아줘"})
+            data = getattr(r, "data", r)
+            check("내 주간보고",
+                  (data[0].get("id"), data[0].get("title")),
+                  ("70001", "8월 3주 주간보고"))
 
 
 async def main() -> None:

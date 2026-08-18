@@ -152,6 +152,15 @@ class H(BaseHTTPRequestHandler):
                     },
                     "excerpt": "쿠폰 받기 버튼 노출 조건",
                 }]})
+            elif "currentUser" in cql and "주간" in cql:
+                self._json({"results": [{
+                    "content": {
+                        "id": "70001", "type": "page",
+                        "title": "8월 3주 주간보고",
+                        "space": {"key": "DEV"},
+                    },
+                    "excerpt": "금주 진행 사항",
+                }]})
             else:
                 self._json({"results": []})
         elif p == "/rest/api/content/search":
@@ -159,6 +168,11 @@ class H(BaseHTTPRequestHandler):
             expand = parse_qs(u.query).get("expand", [""])[0]
             if "없는고유어" in cql:
                 results = []
+            elif "주간" in cql or "currentUser" in cql:
+                results = [
+                    {"id": "70001", "title": "8월 3주 주간보고",
+                     "space": {"key": "DEV"}, "type": "page"},
+                ]
             elif "HIDDENDOC" in cql:
                 results = [
                     {"id": "90001", "title": "숨은 문서",

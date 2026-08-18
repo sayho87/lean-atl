@@ -360,15 +360,57 @@ def _quote_cql_ident(s: str) -> str:
     return s
 
 
+_SELF_RE = re.compile(
+    r"내\s*이름|내가\s*(?:쓴|작성|올린|만든)|내\s*문서|내\s*가\s*(?:쓴|작성)|저자\s*나"
+)
+_WEEKLY_RE = re.compile(r"주간\s*보고|주간보고|주간업무|weekly\s*report", re.I)
+_NOISE_RE = re.compile(
+    r"모아\s*달[라란]?|찾아\s*달[라란]?|검색해\s*줘|검색|관련|문서들?|페이지|"
+    r"부탁|해줘|해서|좀|요$|달라는|달래"
+)
+
+
+def _plain_keyword(q: str) -> str:
+    s = _SELF_RE.sub(" ", q)
+    s = _WEEKLY_RE.sub("주간보고", s)
+    s = _NOISE_RE.sub(" ", s)
+    s = re.sub(r"(?:으로|에서|에게|를|을|이|가|은|는|와|과|도|만|의)\s*", " ", s)
+    s = re.sub(r"[\"'`]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip(" .,?!")
+    return s
+
+
 def _search_queries(raw: str) -> list[str]:
-    """일반 문장은 siteSearch → title|text 순으로 시도. CQL은 그대로."""
+    """일반 문장 → 사이트검색/제목/내 문서(currentUser). CQL은 그대로."""
     q = (raw or "").strip()
     if not q:
         return []
     if _CQL_MARK.search(q):
         return [q]
-    esc = q.replace("\\", "\\\\").replace('"', '\\"')
-    return [f'siteSearch ~ "{esc}"', f'(title ~ "{esc}" OR text ~ "{esc}")']
+    mine = bool(_SELF_RE.search(q))
+    weekly = bool(_WEEKLY_RE.search(q))
+    kw = _plain_keyword(q)
+    if weekly and "주간보고" not in kw:
+        kw = f"주간보고 {kw}".strip()
+    if not kw:
+        kw = q
+    esc = kw.replace("\\", "\\\\").replace('"', '\\"')
+    out: list[str] = []
+    if mine:
+        out.append(f'title ~ "{esc}" AND contributor = currentUser() AND type = page')
+        out.append(f'creator = currentUser() AND title ~ "{esc}" AND type = page')
+        out.append(f'contributor = currentUser() AND siteSearch ~ "{esc}"')
+    out.append(f'siteSearch ~ "{esc}"')
+    out.append(f'title ~ "{esc}" AND type = page')
+    out.append(f'(title ~ "{esc}" OR text ~ "{esc}") AND type = page')
+    # 순서 유지한 채 중복 제거
+    seen: set[str] = set()
+    uniq: list[str] = []
+    for item in out:
+        if item not in seen:
+            seen.add(item)
+            uniq.append(item)
+    return uniq
 
 
 def _norm_search_hit(it: dict) -> dict | None:
@@ -565,13 +607,14 @@ def jira_projects() -> list[dict]:
 
 @mcp.tool
 def confluence_search(cql: str, limit: Annotated[int, "목록 개수, 최대 100"] = 20,
-                      include_snippet: bool = False) -> list[dict]:
-    """검색어 또는 CQL. 일반 문장은 사이트검색 후 제목·본문으로 재시도."""
+                      include_snippet: bool = False,
+                      all_spaces: bool = False) -> list[dict]:
+    """검색어 또는 CQL. 내 문서=currentUser. 필터 밖은 all_spaces=True."""
     last = ""
     used = ""
     out: list[dict] = []
     for q in _search_queries(cql):
-        last = _and_cql_spaces(q)
+        last = q if all_spaces else _and_cql_spaces(q)
         expand = "body.storage" if include_snippet else None
         used, data = _search_raw(last, _clamp_limit(limit), expand)
         batch: list[dict] = []
@@ -586,11 +629,14 @@ def confluence_search(cql: str, limit: Annotated[int, "목록 개수, 최대 100
                            or {}).get("value", "")
                 item["snippet"] = _html_to_text(excerpt or storage, 200)
             batch.append(item)
-        out = _filter_conf(batch)
+        out = batch if all_spaces else _filter_conf(batch)
         if out:
             break
     if not out:
-        return [{"error": "검색 0건", "cql": last, "endpoint": used}]
+        filt = ",".join(sorted(CONF_SPACES)) if CONF_SPACES else "없음"
+        hint = "공간 필터 안만 찾음. 주간보고가 다른 공간이면 all_spaces=True 또는 필터에 키 추가."
+        return [{"error": "검색 0건", "cql": last, "endpoint": used,
+                 "filter": filt, "hint": hint}]
     return out
 
 
