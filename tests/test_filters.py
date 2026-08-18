@@ -203,6 +203,24 @@ async def integration_pagination() -> None:
             check("이름·제목 자동 해석",
                   ("space = DEV" in (data[0].get("cql") or "")
                    and "ancestor = 20001" in (data[0].get("cql") or "")), True)
+            # A: 검색 기본 include_snippet=True → snippet 필드 포함
+            r = await c5.call_tool("confluence_search", {"cql": "다운로드 쿠폰"})
+            data = getattr(r, "data", r)
+            check("기본 snippet 포함", "snippet" in (data[0] or {}), True)
+            # E: 검색 기본 limit 10 캡
+            check("검색 기본 limit 10",
+                  la.confluence_search.__defaults__ and
+                  la.confluence_search.__defaults__[0] == 10, True)
+            check("children 기본 limit 10",
+                  la.confluence_get_children.__defaults__[0] == 10, True)
+            # B: 재조회 방지 — 같은 문서 본문을 두 번 읽지 않는다
+            r = await c5.call_tool("confluence_get", {"id": "12345", "max_chars": 200})
+            data = getattr(r, "data", r)
+            check("첫 조회 본문 있음", bool(data.get("body")), True)
+            r = await c5.call_tool("confluence_get", {"id": "12345", "max_chars": 200})
+            data = getattr(r, "data", r)
+            check("재조회 본문 없음", data.get("already_read") is True
+                  and not data.get("body"), True)
 
 
 async def main() -> None:

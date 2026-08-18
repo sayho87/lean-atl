@@ -73,7 +73,7 @@ CONF_SSL = _flag("CONFLUENCE_SSL_VERIFY")
 
 # --- 출력 캡 / 스코프 필터 ---
 MAX_RESULTS = _env_int("LEAN_MAX_RESULTS", 20)
-BODY_CHARS = _env_int("LEAN_BODY_CHARS", 8000)
+BODY_CHARS = _env_int("LEAN_BODY_CHARS", 3000)
 _MAX_LIST_LIMIT = 100  # limit 명시 시 최대 상한 (2단계 캡: 기본 20, 명시 시 100까지)
 CONF_SPACES = {s.strip() for s in os.environ.get("CONFLUENCE_SPACES_FILTER", "").split(",") if s.strip()}
 JIRA_PROJECTS = {s.strip() for s in os.environ.get("JIRA_PROJECTS_FILTER", "").split(",") if s.strip()}
@@ -778,9 +778,27 @@ def jira_projects() -> list[dict]:
 
 # ---------- Confluence 도구 ----------
 
+# -------- 재조회 방지 (캐시 쓰기 절감) --------
+# 이미 세션에서 본문을 읽은 문서 id. 다시 열면 본문 없이 알려줘 반복 조회를 막는다.
+_DOCS_READ: set[str] = set()
+
+
+def _mark_read(cid: str) -> None:
+    _DOCS_READ.add(cid)
+
+
+def _seen_body(cid: str, title: str | None) -> dict | None:
+    if cid in _DOCS_READ:
+        return {
+            "id": cid, "title": title, "already_read": True,
+            "note": "이전에 이미 본문을 읽은 문서입니다. 내용은 대화 앞부분을 참고하세요.",
+        }
+    return None
+
+
 @mcp.tool
-def confluence_search(cql: str, limit: Annotated[int, "목록 개수, 최대 100"] = 20,
-                      include_snippet: bool = False,
+def confluence_search(cql: str, limit: Annotated[int, "목록 개수, 최대 100"] = 10,
+                      include_snippet: bool = True,
                       all_spaces: bool = False,
                       space_key: str | None = None,
                       under_page: str | None = None) -> list[dict]:
@@ -840,7 +858,7 @@ def confluence_search(cql: str, limit: Annotated[int, "목록 개수, 최대 100
 
 
 @mcp.tool
-def confluence_get_children(id: str, limit: Annotated[int, "목록 개수, 최대 100"] = 20) -> list[dict]:
+def confluence_get_children(id: str, limit: Annotated[int, "목록 개수, 최대 100"] = 10) -> list[dict]:
     """페이지의 하위 페이지 목록(id, 제목)."""
     _check_content_id(id)
     denied = _require_conf_space(id)
@@ -881,21 +899,26 @@ def confluence_space_tree(space_key: str, max_depth: int = 5, limit: int = 100) 
 
 
 @mcp.tool
-def confluence_get(id: str, max_chars: int = 8000) -> dict:
+def confluence_get(id: str, max_chars: int = 3000) -> dict:
     """페이지 본문을 plain text로 돌려준다. max_chars로 절단."""
     _check_content_id(id)
     max_chars = _clamp_chars(max_chars)
     data = _cget(f"/rest/api/content/{id}", expand="body.storage,space")
     sp = (data.get("space") or {}).get("key")
+    title = data.get("title")
     denied = _space_denied(sp)
     if denied:
         return denied
+    cached = _seen_body(id, title)
+    if cached is not None:
+        return cached
     storage = (data.get("body") or {}).get("storage", {}).get("value", "")
+    _mark_read(id)
     return {
-        "id": data.get("id"),
-        "title": data.get("title"),
+        "id": id,
+        "title": title,
         "space": sp,
-        "url": f"{CONF_URL}/spaces/{sp}/pages/{data.get('id')}",
+        "url": f"{CONF_URL}/spaces/{sp}/pages/{id}",
         "body": _html_to_text(storage, max_chars),
     }
 
