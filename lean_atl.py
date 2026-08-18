@@ -341,6 +341,79 @@ def _quote_ident(s: str) -> str:
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+_CQL_RESERVED = frozenset({
+    "and", "or", "not", "in", "type", "space", "title", "text", "label",
+    "creator", "contributor", "mention", "watcher", "ancestor", "parent",
+    "content", "id", "key",
+})
+_CQL_MARK = re.compile(
+    r'(?:=|~|<>|>=|<=|\bAND\b|\bOR\b|\bNOT\b|\bIN\b|\bcurrentUser\s*\()',
+    re.IGNORECASE,
+)
+
+
+def _quote_cql_ident(s: str) -> str:
+    """CQL 식별자. 필요한 경우만 따옴표 (기존 도구와 동일 규칙)."""
+    if (s.startswith("~") or (s[:1].isdigit()) or '"' in s or "\\" in s
+            or " " in s or "-" in s or s.casefold() in _CQL_RESERVED):
+        return _quote_ident(s)
+    return s
+
+
+def _search_queries(raw: str) -> list[str]:
+    """일반 문장은 siteSearch → title|text 순으로 시도. CQL은 그대로."""
+    q = (raw or "").strip()
+    if not q:
+        return []
+    if _CQL_MARK.search(q):
+        return [q]
+    esc = q.replace("\\", "\\\\").replace('"', '\\"')
+    return [f'siteSearch ~ "{esc}"', f'(title ~ "{esc}" OR text ~ "{esc}")']
+
+
+def _norm_search_hit(it: dict) -> dict | None:
+    """ /rest/api/search 는 content 아래에 id/title/space 가 있다."""
+    content = it.get("content") if isinstance(it.get("content"), dict) else it
+    if not isinstance(content, dict):
+        return None
+    cid = content.get("id") or it.get("id")
+    if not cid:
+        return None
+    typ = content.get("type") or it.get("entityType") or "page"
+    if typ not in ("page", "blogpost", "content"):
+        return None
+    space = content.get("space") if "space" in content else it.get("space")
+    if isinstance(space, dict):
+        sp = space.get("key")
+    else:
+        sp = space
+    return {
+        "id": str(cid),
+        "title": content.get("title") or it.get("title"),
+        "space": sp,
+        "url": f"{CONF_URL}/spaces/{sp}/pages/{cid}",
+    }
+
+
+def _search_raw(cql: str, limit: int, expand: str | None) -> tuple[str, dict]:
+    """DC는 /rest/api/search 가 웹 UI와 같다. 비거나 없으면 content/search."""
+    empty: tuple[str, dict] | None = None
+    last_err = ""
+    for name, path in (("search", "/rest/api/search"),
+                       ("content/search", "/rest/api/content/search")):
+        code, data = _cget_status(path, cql=cql, limit=limit, expand=expand)
+        if code != 200:
+            last_err += f"{name} HTTP {code}; "
+            continue
+        if data.get("results"):
+            return name, data
+        if empty is None:
+            empty = (name, data)
+    if empty:
+        return empty
+    return "none", {"results": [], "error": last_err.strip()}
+
+
 def _and_query(q: str, clause: str) -> str:
     """질의에 AND 절을 강제. 끝의 ORDER BY는 보존."""
     if not q or not q.strip():
@@ -367,7 +440,7 @@ def _and_cql_spaces(cql: str) -> str:
     """CONFLUENCE_SPACES_FILTER를 CQL에 강제 AND."""
     if not CONF_SPACES:
         return cql
-    clause = " OR ".join(f"space = {_quote_ident(s)}" for s in sorted(CONF_SPACES))
+    clause = " OR ".join(f"space = {_quote_cql_ident(s)}" for s in sorted(CONF_SPACES))
     if len(CONF_SPACES) > 1:
         clause = f"({clause})"
     return _and_query(cql, clause)
@@ -493,25 +566,32 @@ def jira_projects() -> list[dict]:
 @mcp.tool
 def confluence_search(cql: str, limit: Annotated[int, "목록 개수, 최대 100"] = 20,
                       include_snippet: bool = False) -> list[dict]:
-    """CQL로 페이지 검색. include_snippet=True면 본문 첫 200자 포함."""
-    cql = _and_cql_spaces(cql)
-    data = _cget("/rest/api/content/search", cql=cql,
-                 limit=_clamp_limit(limit),
-                 expand="body.storage" if include_snippet else None)
-    out = []
-    for it in data.get("results", []):
-        sp = (it.get("space") or {}).get("key")
-        item = {
-            "id": it.get("id"),
-            "title": it.get("title"),
-            "space": sp,
-            "url": f"{CONF_URL}/spaces/{sp}/pages/{it.get('id')}",
-        }
-        if include_snippet:
-            storage = (it.get("body") or {}).get("storage", {}).get("value", "")
-            item["snippet"] = _html_to_text(storage, 200)
-        out.append(item)
-    return _filter_conf(out)
+    """검색어 또는 CQL. 일반 문장은 사이트검색 후 제목·본문으로 재시도."""
+    last = ""
+    used = ""
+    out: list[dict] = []
+    for q in _search_queries(cql):
+        last = _and_cql_spaces(q)
+        expand = "body.storage" if include_snippet else None
+        used, data = _search_raw(last, _clamp_limit(limit), expand)
+        batch: list[dict] = []
+        for it in data.get("results") or []:
+            item = _norm_search_hit(it)
+            if not item:
+                continue
+            if include_snippet:
+                excerpt = it.get("excerpt") or ""
+                storage = ((it.get("body") or {}).get("storage")
+                           or ((it.get("content") or {}).get("body") or {}).get("storage")
+                           or {}).get("value", "")
+                item["snippet"] = _html_to_text(excerpt or storage, 200)
+            batch.append(item)
+        out = _filter_conf(batch)
+        if out:
+            break
+    if not out:
+        return [{"error": "검색 0건", "cql": last, "endpoint": used}]
+    return out
 
 
 @mcp.tool

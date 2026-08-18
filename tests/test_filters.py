@@ -44,6 +44,11 @@ def unit() -> None:
     check("한도 음수", la_re2._clamp_limit(-1), la_re2.MAX_RESULTS)
     check("한도 과다", la_re2._clamp_limit(999999), la_re2.MAX_RESULTS)
     check("본문 과다", la_re2._clamp_chars(10_000_000), la_re2.BODY_CHARS)
+    check("cql 키 미인용", la_re2._quote_cql_ident("ENMeProduct"), "ENMeProduct")
+    check("cql 개인공간 인용", la_re2._quote_cql_ident("~user"), '"~user"')
+    check("일반문장→siteSearch", la_re2._search_queries("인당발행갯수")[0],
+          'siteSearch ~ "인당발행갯수"')
+    check("CQL 그대로", la_re2._search_queries('text ~ "foo"'), ['text ~ "foo"'])
 
 
 async def integration() -> None:
@@ -128,6 +133,24 @@ async def integration_pagination() -> None:
                   (data.get("space"), data.get("page_count"),
                    data.get("roots", [{}])[0].get("title")),
                   ("HIDDENDOC", 1, "숨은 문서"))
+
+        os.environ["CONFLUENCE_SPACES_FILTER"] = ""
+        m5 = importlib.reload(la).mcp
+        async with Client(m5) as c5:
+            r = await c5.call_tool("confluence_search", {"cql": "다운로드 쿠폰안"})
+            data = getattr(r, "data", r)
+            check("일반문장 siteSearch",
+                  (data[0].get("id"), data[0].get("space"), data[0].get("title")),
+                  ("182209768", "productplan", "다운로드 쿠폰안"))
+            r = await c5.call_tool("confluence_search", {"cql": "없는고유어xyz123"})
+            data = getattr(r, "data", r)
+            # siteSearch mock only matches siteSearch token; fallback content/search
+            # still returns DEV pages for non-HIDDENDOC CQL. 고유어는 CQL 연산자 없음
+            # → siteSearch 히트(다운로드 쿠폰안). 0건 진단은 CQL 경로로 확인.
+            r = await c5.call_tool("confluence_search",
+                                   {"cql": 'text ~ "없는고유어xyz123"'})
+            data = getattr(r, "data", r)
+            check("CQL 0건 진단", data[0].get("error"), "검색 0건")
 
 
 async def main() -> None:

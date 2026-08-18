@@ -141,10 +141,25 @@ class H(BaseHTTPRequestHandler):
             self._json(PROJECTS)
         elif p == "/rest/api/2/project":
             self._json(PROJECTS["values"])  # Server/DC v2는 배열 반환
+        elif p == "/rest/api/search":
+            cql = parse_qs(u.query).get("cql", [""])[0]
+            if "siteSearch" in cql:
+                self._json({"results": [{
+                    "content": {
+                        "id": "182209768", "type": "page",
+                        "title": "다운로드 쿠폰안",
+                        "space": {"key": "productplan", "name": "상품 계획"},
+                    },
+                    "excerpt": "쿠폰 받기 버튼 노출 조건",
+                }]})
+            else:
+                self._json({"results": []})
         elif p == "/rest/api/content/search":
             cql = parse_qs(u.query).get("cql", [""])[0]
             expand = parse_qs(u.query).get("expand", [""])[0]
-            if "HIDDENDOC" in cql:
+            if "없는고유어" in cql:
+                results = []
+            elif "HIDDENDOC" in cql:
                 results = [
                     {"id": "90001", "title": "숨은 문서",
                      "space": {"key": "HIDDENDOC", "name": "숨은 스페이스"},
