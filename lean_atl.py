@@ -739,13 +739,30 @@ def jira_projects() -> list[dict]:
 @mcp.tool
 def confluence_search(cql: str, limit: Annotated[int, "목록 개수, 최대 100"] = 20,
                       include_snippet: bool = False,
-                      all_spaces: bool = False) -> list[dict]:
-    """검색어 또는 CQL. 내 문서=currentUser. 필터 밖은 all_spaces=True."""
+                      all_spaces: bool = False,
+                      space_key: str | None = None,
+                      under_page: str | None = None) -> list[dict]:
+    """검색어 또는 CQL. 범위가 애매하면 사용자에게 어느 공간·문서인지 물어본 뒤
+    space_key(공간 키)·under_page(문서 id, 그 하위 포함)로 좁혀 검색하세요.
+    내 문서=currentUser. 필터 밖 전체=all_spaces=True."""
+    if space_key:
+        _check_space_key(space_key)
+        if (not all_spaces and CONF_SPACES
+                and space_key.casefold() not in _CONF_SPACES_CF):
+            return [{"error": f"필터에 없는 공간: {space_key}",
+                     "allowed": sorted(CONF_SPACES),
+                     "hint": "all_spaces=True 또는 필터에 키를 추가하세요."}]
+    if under_page:
+        _check_content_id(under_page)
     last = ""
     used = ""
     out: list[dict] = []
     for q in _search_queries(cql):
         last = q if all_spaces else _and_cql_spaces(q)
+        if space_key:
+            last = _and_query(last, f"space = {_quote_cql_ident(space_key)}")
+        if under_page:
+            last = _and_query(last, f"ancestor = {under_page}")
         expand = "body.storage" if include_snippet else None
         used, data = _search_raw(last, _clamp_limit(limit), expand)
         batch: list[dict] = []
@@ -765,7 +782,8 @@ def confluence_search(cql: str, limit: Annotated[int, "목록 개수, 최대 100
             break
     if not out:
         filt = ",".join(sorted(CONF_SPACES)) if CONF_SPACES else "없음"
-        hint = "공간 필터 안만 찾음. 주간보고가 다른 공간이면 all_spaces=True 또는 필터에 키 추가."
+        hint = ("공간 필터 안만 찾음. 다른 공간이면 all_spaces=True 또는 필터에 키 추가. "
+                "범위가 너무 넓으면 사용자에게 space_key·under_page를 물어보고 좁혀 재검색.")
         return [{"error": "검색 0건", "cql": last, "endpoint": used,
                  "filter": filt, "hint": hint}]
     return out

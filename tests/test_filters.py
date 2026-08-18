@@ -186,6 +186,14 @@ async def integration_pagination() -> None:
             check("excerpt 거부 후 재시도",
                   (data[0].get("id"), data[0].get("space")),
                   ("182209768", "productplan"))
+            # 범위 좁히기: space_key + under_page(문서 하위 포함)
+            r = await c5.call_tool("confluence_search",
+                                   {"cql": 'text ~ "없는고유어xyz123"',
+                                    "space_key": "DEV", "under_page": "12345"})
+            data = getattr(r, "data", r)
+            check("space_key 하위포함 AND 구성",
+                  ("space = DEV" in (data[0].get("cql") or "")
+                   and "ancestor = 12345" in (data[0].get("cql") or "")), True)
 
 
 async def main() -> None:
