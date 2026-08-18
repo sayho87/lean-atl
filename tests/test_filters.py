@@ -113,6 +113,22 @@ async def integration_pagination() -> None:
             data = getattr(r, "data", r)
             check("필터없음 limit 100", len(data), 100)
 
+        # 목록 API에 없고 spaceKey 조회도 404인 공간 — CQL로는 열림
+        os.environ["CONFLUENCE_SPACES_FILTER"] = "HIDDENDOC"
+        m4 = importlib.reload(la).mcp
+        async with Client(m4) as c4:
+            r = await c4.call_tool("confluence_spaces", {})
+            data = getattr(r, "data", r)
+            check("목록에 없는 키를 CQL로 확인",
+                  [(x.get("key"), x.get("name"), x.get("error")) for x in data],
+                  [("HIDDENDOC", "숨은 스페이스", None)])
+            r = await c4.call_tool("confluence_space_tree", {"space_key": "HIDDENDOC"})
+            data = getattr(r, "data", r)
+            check("spaceKey 404 → CQL 트리",
+                  (data.get("space"), data.get("page_count"),
+                   data.get("roots", [{}])[0].get("title")),
+                  ("HIDDENDOC", 1, "숨은 문서"))
+
 
 async def main() -> None:
     unit()

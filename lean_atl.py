@@ -174,6 +174,23 @@ def _cget(path: str, **params: Any) -> dict:
     return _get_retry(conf_client(), path, params)
 
 
+def _cget_status(path: str, **params: Any) -> tuple[int, dict]:
+    """상태 코드를 그대로 돌려준다. 404 판별용 (raise 하지 않음). 429·5xx는 1회 재시도."""
+    clean = {k: v for k, v in params.items() if v is not None}
+    client = conf_client()
+    r = client.get(path, params=clean)
+    if r.status_code in (429, 500, 502, 503):
+        time.sleep(1)
+        r = client.get(path, params=clean)
+    try:
+        body = r.json() if r.content else {}
+    except ValueError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {"results": body} if isinstance(body, list) else {}
+    return r.status_code, body
+
+
 def _get_retry(client: httpx.Client, path: str, params: dict) -> dict:
     """429(속도 제한)·5xx(서버 일시 오류)면 1초 뒤 1회 재시도. 그 외 오류는 즉시 전달."""
     clean = {k: v for k, v in params.items() if v is not None}
@@ -239,22 +256,44 @@ def _filter_conf(results: list[dict]) -> list[dict]:
     return [r for r in results if (r.get("key") or r.get("space") or "").casefold() in _CONF_SPACES_CF]
 
 
-_MAX_SPACE_PAGES = 50  # 페이지네이션 안전 상한 (50페이지 × 100개 = 5,000개 스페이스면 충분)
+def _lookup_space(key: str) -> dict:
+    """필터 키 1개를 확인한다. 목록 API에 없어도 단건·검색으로 찾는다.
 
-
-def _cget_spaces_page(start: int, page_limit: int = 100) -> tuple[list[dict], int | None]:
-    """스페이스 목록 한 페이지 조회 → (results, next_start). next_start None이면 끝.
-
-    _links.next 상대경로(예: /rest/api/space?limit=100&start=100)에서 start 추출,
-    없으면 이번 배치 크기로 계산. start가 None일 때만 종료 (무한 루프 방지).
+    /rest/api/space 목록은 '공간 디렉터리'라서, 검색(CQL)으로 열리는 공간이
+    목록에 없는 경우가 있다. 필터가 있으면 목록을 돌지 않고 키를 직접 조회한다.
     """
-    data = _cget("/rest/api/space", limit=page_limit, start=start)
-    results = data.get("results") or []
-    next_link = (data.get("_links") or {}).get("next")
-    if not next_link:
-        return results, None
-    m = re.search(r"[?&]start=(\d+)", str(next_link))
-    return results, (int(m.group(1)) if m else start + len(results))
+    if _SPACE_KEY_RE.match(key or ""):
+        code, data = _cget_status(f"/rest/api/space/{key}")
+        if code == 200:
+            return {"key": data.get("key") or key,
+                    "name": data.get("name"),
+                    "type": data.get("type")}
+    cql = f"space = {_quote_ident(key)} AND type = page"
+    try:
+        data = _cget("/rest/api/content/search", cql=cql, limit=1, expand="space")
+    except httpx.HTTPStatusError:
+        return {"key": key, "error": "단건 조회·검색 모두 실패"}
+    hit = (data.get("results") or [None])[0]
+    if not hit:
+        return {"key": key, "error": "단건 조회 없음, 검색 0건"}
+    sp = hit.get("space") or {}
+    return {"key": sp.get("key") or key,
+            "name": sp.get("name") or key,
+            "type": sp.get("type") or "global"}
+
+
+def _pages_in_space(space_key: str, limit: int) -> list[dict]:
+    """스페이스 페이지 목록. spaceKey 조회가 404면 CQL로 대체한다."""
+    code, data = _cget_status("/rest/api/content", spaceKey=space_key,
+                              type="page", expand="ancestors", limit=limit)
+    if code == 200:
+        return data.get("results") or []
+    if code != 404:
+        raise RuntimeError(f"스페이스 페이지 조회 실패: HTTP {code}")
+    data = _cget("/rest/api/content/search",
+                 cql=f"space = {_quote_ident(space_key)} AND type = page",
+                 expand="ancestors,space", limit=limit)
+    return data.get("results") or []
 
 
 def _filter_proj(results: list[dict]) -> list[dict]:
@@ -496,12 +535,11 @@ def confluence_space_tree(space_key: str, max_depth: int = 5, limit: int = 100) 
         return {"space": space_key,
                 "error": f"CONFLUENCE_SPACES_FILTER에 없는 스페이스 (허용: {sorted(CONF_SPACES)})"}
     max_depth = _clamp_depth(max_depth)
-    data = _cget("/rest/api/content", spaceKey=space_key, type="page",
-                 expand="ancestors", limit=_clamp_limit(limit))
+    raw_pages = _pages_in_space(space_key, _clamp_limit(limit))
     raw = [{"id": p.get("id"), "title": p.get("title"),
             "depth": len(p.get("ancestors") or []),
             "parent_id": (p.get("ancestors") or [{}])[-1].get("id") if p.get("ancestors") else None}
-           for p in data.get("results", [])]
+           for p in raw_pages]
     nodes = {p["id"]: {"id": p["id"], "title": p["title"], "children": []} for p in raw}
     roots = []
     for p in raw:
@@ -564,18 +602,20 @@ def confluence_get_comments(id: str, limit: Annotated[int, "목록 개수, 최�
 
 @mcp.tool
 def confluence_spaces(limit: Annotated[int, "목록 개수, 최대 100"] = 20) -> list[dict]:
-    """스페이스 목록(key, 이름). CONFLUENCE_SPACES_FILTER 적용."""
+    """스페이스 목록(key, 이름). 필터가 있으면 키별 직접 조회."""
     if CONF_SPACES:
-        # 필터 설정 시: 전체 스페이스 페이지네이션 조회 후 필터 매칭 —
-        # 스페이스가 많아 첫 페이지에 없어도 뒤쪽에서 정확히 찾는다.
-        all_spaces: list[dict] = []
-        start: int | None = 0
-        for _ in range(_MAX_SPACE_PAGES):
-            batch, start = _cget_spaces_page(start)
-            all_spaces.extend(batch)
-            if start is None:
-                break
-        return _filter_conf(all_spaces)
+        # 목록 API(/rest/api/space)는 공간 디렉터리라서 검색으로 열리는 공간이
+        # 빠질 수 있다. 필터 키는 단건 조회 → 실패 시 CQL로 확인한다.
+        seen: set[str] = set()
+        out: list[dict] = []
+        for k in sorted(CONF_SPACES):
+            item = _lookup_space(k)
+            ck = (item.get("key") or k).casefold()
+            if ck in seen:
+                continue
+            seen.add(ck)
+            out.append(item)
+        return out
     data = _cget("/rest/api/space", limit=_clamp_limit(limit))
     return [{"key": s.get("key"), "name": s.get("name"), "type": s.get("type")}
             for s in data.get("results", [])]

@@ -144,12 +144,28 @@ class H(BaseHTTPRequestHandler):
         elif p == "/rest/api/content/search":
             cql = parse_qs(u.query).get("cql", [""])[0]
             expand = parse_qs(u.query).get("expand", [""])[0]
-            results = [
-                {"id": "12345", "title": "릴리스 노트 3.2", "space": {"key": "DEV"}},
-                {"id": "12346", "title": "릴리스 노트 3.1", "space": {"key": "DEV"}},
-            ]
-            if "3.2" in cql:
-                results = results[:1]
+            if "HIDDENDOC" in cql:
+                results = [
+                    {"id": "90001", "title": "숨은 문서",
+                     "space": {"key": "HIDDENDOC", "name": "숨은 스페이스"},
+                     "ancestors": []},
+                ]
+            else:
+                cql_cf = cql.casefold()
+                known = {s["key"].casefold(): s for s in _MANY_SPACES}
+                hit = next((s for cf, s in known.items()
+                            if cf in cql_cf and "space" in cql_cf
+                            and cf not in ("dev",)), None)
+                if hit:
+                    results = [{"id": "80001", "title": f"{hit['key']} 문서",
+                                "space": hit, "ancestors": []}]
+                else:
+                    results = [
+                        {"id": "12345", "title": "릴리스 노트 3.2", "space": {"key": "DEV"}},
+                        {"id": "12346", "title": "릴리스 노트 3.1", "space": {"key": "DEV"}},
+                    ]
+                    if "3.2" in cql:
+                        results = results[:1]
             if "body.storage" in expand:
                 for r in results:
                     r["body"] = {"storage": {"value": PAGE["body"]["storage"]["value"]}}
@@ -158,10 +174,22 @@ class H(BaseHTTPRequestHandler):
             self._json(CHILDREN)
         elif p.startswith("/rest/api/content/12345/child/comment"):
             self._json(COMMENTS)
-        elif p == "/rest/api/content" and parse_qs(u.query).get("spaceKey", [""])[0] == "DEV":
-            self._json(SPACE_PAGES)
+        elif p == "/rest/api/content":
+            sk = parse_qs(u.query).get("spaceKey", [""])[0]
+            if sk == "DEV":
+                self._json(SPACE_PAGES)
+            else:
+                # 실서버 재현: 목록/단건에 없는 공간은 spaceKey 조회도 404
+                self._json({"error": f"space not found: {sk}"}, 404)
         elif p.startswith("/rest/api/content/12345"):
             self._json(PAGE)
+        elif p.startswith("/rest/api/space/"):
+            key = p[len("/rest/api/space/"):]
+            found = next((s for s in _MANY_SPACES if s["key"] == key), None)
+            if found:
+                self._json(found)
+            else:
+                self._json({"error": f"space not found: {key}"}, 404)
         elif p == "/rest/api/space":
             # 실제 Confluence 페이지네이션 응답 형식: results/start/limit/size/_links.next
             q = parse_qs(u.query)
