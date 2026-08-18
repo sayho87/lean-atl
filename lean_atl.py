@@ -296,6 +296,48 @@ def _filter_conf(results: list[dict]) -> list[dict]:
     return out
 
 
+def _resolve_space_ref(ref: str) -> str:
+    """공간 키 또는 이름 → 실제 키. 키 우선, 이름은 목록 API name 필터로."""
+    r = (ref or "").strip()
+    if _SPACE_KEY_RE.match(r):
+        try:
+            code, data = _cget_status(f"/rest/api/space/{r}")
+        except httpx.HTTPStatusError:  # 429·5xx 재시도 후에도 실패
+            code, data = 0, {}
+        if code == 200 and data.get("key"):
+            return str(data["key"])
+        # 키로 안 열리면 이름으로 시도 (아래로 통합)
+    hits = _cget("/rest/api/space", name=r, limit=1)
+    for s in hits.get("results") or []:
+        if s.get("key"):
+            return str(s["key"])
+    # 마지막: CQL로 공간 존재 확인
+    try:
+        hit = _cget("/rest/api/content/search",
+                    cql=f"space = {_quote_ident(r)} AND type = page", limit=1)
+        for it in hit.get("results") or []:
+            sp = it.get("space") or {}
+            if sp.get("key"):
+                return str(sp["key"])
+    except httpx.HTTPStatusError:
+        pass
+    raise ValueError(f"공간을 찾지 못함: {r!r} — 키 또는 정확한 이름을 입력하세요.")
+
+
+def _resolve_page_ref(ref: str) -> str:
+    """문서 id 또는 제목 → id. 숫자면 id, 아니면 제목 검색."""
+    r = (ref or "").strip()
+    if r.isdigit():
+        return r
+    esc = r.replace("\\", "\\\\").replace('"', '\\"')
+    name, data = _search_raw(f'type = page AND title ~ "{esc}"', 1, None)
+    for it in data.get("results") or []:
+        item = _norm_search_hit(it)
+        if item and item.get("id"):
+            return str(item["id"])
+    raise ValueError(f"문서를 찾지 못함: {r!r} — id 또는 정확한 제목을 입력하세요.")
+
+
 def _lookup_space(key: str) -> dict:
     """필터 키 1개를 확인한다. 목록 API에 없어도 단건·검색으로 찾는다.
 
@@ -743,16 +785,23 @@ def confluence_search(cql: str, limit: Annotated[int, "목록 개수, 최대 100
                       space_key: str | None = None,
                       under_page: str | None = None) -> list[dict]:
     """검색어 또는 CQL. 범위가 애매하면 사용자에게 어느 공간·문서인지 물어본 뒤
-    space_key(공간 키)·under_page(문서 id, 그 하위 포함)로 좁혀 검색하세요.
-    내 문서=currentUser. 필터 밖 전체=all_spaces=True."""
+    space_key(공간 키 또는 이름)·under_page(문서 id 또는 제목, 그 하위 포함)로
+    좁혀 검색하세요. 내 문서=currentUser, 필터 밖 전체=all_spaces=True."""
     if space_key:
-        _check_space_key(space_key)
+        try:
+            space_key = _resolve_space_ref(space_key)
+        except ValueError as e:
+            return [{"error": str(e)}]
         if (not all_spaces and CONF_SPACES
                 and space_key.casefold() not in _CONF_SPACES_CF):
             return [{"error": f"필터에 없는 공간: {space_key}",
                      "allowed": sorted(CONF_SPACES),
                      "hint": "all_spaces=True 또는 필터에 키를 추가하세요."}]
     if under_page:
+        try:
+            under_page = _resolve_page_ref(under_page)
+        except ValueError as e:
+            return [{"error": str(e)}]
         _check_content_id(under_page)
     last = ""
     used = ""

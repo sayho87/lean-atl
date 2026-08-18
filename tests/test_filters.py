@@ -194,6 +194,15 @@ async def integration_pagination() -> None:
             check("space_key 하위포함 AND 구성",
                   ("space = DEV" in (data[0].get("cql") or "")
                    and "ancestor = 12345" in (data[0].get("cql") or "")), True)
+            # 이름/제목으로 범위 좁히기 — 자동 해석
+            r = await c5.call_tool("confluence_search",
+                                   {"cql": 'text ~ "없는고유어xyz123"',
+                                    "space_key": "개발팀 스페이스",
+                                    "under_page": "개발 가이드"})
+            data = getattr(r, "data", r)
+            check("이름·제목 자동 해석",
+                  ("space = DEV" in (data[0].get("cql") or "")
+                   and "ancestor = 20001" in (data[0].get("cql") or "")), True)
 
 
 async def main() -> None:

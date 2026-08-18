@@ -173,6 +173,14 @@ class H(BaseHTTPRequestHandler):
                     },
                     "excerpt": "금주 진행 사항",
                 }]})
+            elif "title ~" in cql and "개발 가이드" in cql:
+                self._json({"results": [{
+                    "content": {
+                        "id": "20001", "type": "page",
+                        "title": "개발 가이드",
+                        "space": {"key": "DEV", "name": "개발팀 스페이스"},
+                    },
+                }]})
             elif "siteSearch" in cql:
                 self._json({"results": [{
                     "content": {
@@ -246,6 +254,10 @@ class H(BaseHTTPRequestHandler):
             start = int(q.get("start", ["0"])[0])
             limit = int(q.get("limit", ["25"])[0])
             source = _MANY_SPACES
+            if "name" in q:
+                nm = q["name"][0]
+                source = [s for s in source if s["name"] == nm]
+                start, limit = 0, len(source)
             page = source[start:start + limit]
             resp = {
                 "results": page,
